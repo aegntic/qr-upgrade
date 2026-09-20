@@ -1,0 +1,12 @@
+{
+  "name": "qr-upgrade-service",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-09-19",
+  "workers_dev": true,
+  "account_id": "548a933e3812ca9cd840b787ca7e1eb1",
+  "ai": { "binding": "AI" },
+  "d1_databases": [{"binding":"DB","database_name":"qr-upgrade","database_id":"78cddae0-5174-4a8f-910a-a814e60815cd","migrations_dir":"migrations"}],
+  "triggers": { "crons": ["17 * * * *"] },
+  "observability": { "enabled": false },
+  "vars": {"AI_MODEL":"@cf/black-forest-labs/flux-1-schnell","DAILY_GLOBAL_LIMIT":"50","DAILY_NETWORK_LIMIT":"3"}
+}

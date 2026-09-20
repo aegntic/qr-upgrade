@@ -41,6 +41,7 @@ import { exportQR, readLocalImage, validateRendered } from "@/lib/browser-qr";
 import { artworkDesigns } from "@/lib/artwork-designs";
 import { DestinationIcon } from "./destination-icon";
 import { QrPreviewDialog } from "./qr-preview-dialog";
+import AiArtPanel from "./ai-art-panel";
 import "../app/composition.css";
 import artProofs from "@/lib/artwork-proofs.json";
 import {
@@ -377,6 +378,20 @@ export default function GeneratorStudio({
     setStudyActive(false);
     setStrength(artProofs[id].strength);
   }
+  function applyGeneratedArt(image: string) {
+    uploads.current.image++;
+    setUploading((active) => ({ ...active, image: false }));
+    setCustomImage(image);
+    setMode("image");
+    setStudyActive(false);
+    setAdjustments(defaultImageAdjustments);
+    setStrength(0.4);
+    setTab("Style");
+    setResult(null);
+    setFailure(null);
+    setRenderEpoch((value) => value + 1);
+    setMessage("Generated artwork applied. Checking the complete QR image now.");
+  }
   function chooseTemplate(index: number) {
     uploads.current.image++;
     setUploading((active) => ({ ...active, image: false }));
@@ -486,7 +501,7 @@ export default function GeneratorStudio({
           <span className="status-dot" /> Your QR starts here
         </span>
         <span>
-          <ShieldCheck size={12} /> Private by design · works in your browser
+          <ShieldCheck size={12} /> Images and destinations are processed here · AI prompts are sent only when you generate
         </span>
       </div>
       <div className="generator-grid">
@@ -705,6 +720,7 @@ export default function GeneratorStudio({
             >
               {tab === "Designs" && (
                 <>
+                  {mode === "art" && <AiArtPanel onApply={applyGeneratedArt} />}
                   <div className="design-panel-heading">
                     <span>
                       {mode === "custom"

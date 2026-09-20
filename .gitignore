@@ -7,3 +7,6 @@ node_modules/
 # Internal evidence can contain audit details; use protected artifact storage.
 compliance/evidence/
 .vercel
+.workflows/
+.wrangler/
+.dev.vars*

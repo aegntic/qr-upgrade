@@ -26,7 +26,7 @@ function CurrentDesignLab() {
   useEffect(()=>()=>{sequence.current++;},[]);
   async function chooseScene(file?:File){ if(!file)return;const token=++sequence.current;setReading(true);try{const result=await readLocalImage(file);if(sequence.current===token){setCustomScene(result);setScene('custom');}}catch(e){if(sequence.current===token)setNotice(e instanceof Error?e.message:'Cannot read this scene.');}finally{if(sequence.current===token)setReading(false);}}
   function edit(){setDesign({...draft!,sizeMm},null,savedId);router.push('/generator?resume=1');}
-  async function download(){if(!ready||exporting||reading)return;setExporting(true);try{await exportQR(artifact!.svg,'png',sizeMm,draft!.name);setNotice('Your QR image was downloaded. The placement scene is not included.');}catch(e){setNotice(e instanceof Error?e.message:'Export failed.');}finally{setExporting(false);}}
+  async function download(){if(!ready||exporting||reading)return;setExporting(true);try{await exportQR(artifact!.svg,'png',sizeMm,draft!.name,artifact!.text);setNotice('Your QR image was downloaded. The placement scene is not included.');}catch(e){setNotice(e instanceof Error?e.message:'Export failed.');}finally{setExporting(false);}}
   const checks=[['Full-size image',current?.pristine],['256 px image',artifact!.reduced],['Selected conditions',current?.simulated],['Print size & distance',dimensionsPass]] as const;
   return <section className="connected-lab">
     <div className="workflow-toolbar"><button onClick={edit}><ArrowLeft size={16}/>Back to your design</button><span className="workflow-session"><span/>Testing <strong>{draft!.name || 'Untitled QR'}</strong> · exact studio image</span><Link href="/designs">My designs ↗</Link></div>
@@ -45,4 +45,4 @@ function CurrentDesignLab() {
     </aside></div><input ref={upload} type="file" hidden accept="image/png,image/jpeg,image/webp" onChange={e=>{void chooseScene(e.target.files?.[0]);e.target.value='';}}/>{notice&&<p role="status" className="workflow-notice">{notice}</p>}
   </section>;
 }
-function Slider({label,value,min,max,step=1,unit,onChange}:{label:string;value:number;min:number;max:number;step?:number;unit:string;onChange:(n:number)=>void}){return <label className="workflow-slider"><span>{label}<output>{value} {unit}</output></span><input type="range" min={min} max={max} step={step} value={value} onChange={e=>onChange(Number(e.target.value))}/></label>;}
+function Slider({label,value,min,max,step=1,unit,onChange}:{label:string;value:number;min:number;max:number;step?:number;unit:string;onChange:(n:number)=>void}){return <label className="workflow-slider"><span>{label}<output>{value} {unit}</output></span><input type="range" aria-label={label} min={min} max={max} step={step} value={value} onChange={e=>onChange(Number(e.target.value))}/></label>;}

@@ -16,3 +16,6 @@ scripts/
 README.md
 DESIGN.md
 PRODUCT.md
+workers/
+.workflows/
+docs/
