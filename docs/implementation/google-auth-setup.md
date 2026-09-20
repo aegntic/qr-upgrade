@@ -1,6 +1,6 @@
 # Google accounts and private cloud storage
 
-The account page and API fail closed until all four server environment variables exist: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `QR_SERVICE_URL`, and `QR_SERVICE_SECRET` (at least 32 characters). No fallback identity or browser tokens are used. Google registration and production sign-in have not been verified without actual credentials.
+The account page and API fail closed until all four server environment variables exist: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `QR_SERVICE_URL`, and `QR_SERVICE_SECRET` (at least 32 characters). No fallback identity or browser tokens are used. On 20 September 2026 the owner approved registration of QR Upgrade Web in the selected Google Cloud project. Both callbacks below are registered; the owner's development email is an explicit test user. Client ID and secret are in sensitive Vercel production settings and mode-0600 local configuration. The application remains in Google external testing mode; public branding/policy review is pending. Genuine sign-in evidence is recorded separately from configuration.
 
 ## Google Cloud configuration
 
