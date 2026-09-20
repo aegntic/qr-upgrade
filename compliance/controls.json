@@ -146,7 +146,7 @@
       "title": "Backups, recovery and continuity",
       "maxAgeDays": 90,
       "area": "Availability",
-      "requiredEvidence": "Test source/configuration recovery and service rollback. Record RTO/RPO and the approved absence of customer campaign storage.",
+      "requiredEvidence": "Test source/configuration and D1/private-R2 customer data recovery together, including publication state and object references. Record service rollback, measured RTO/RPO, backup access, retention and owner approval.",
       "bindToSource": false
     },
     {
@@ -226,7 +226,7 @@
       "title": "Enterprise data-feature launch approval",
       "maxAgeDays": 90,
       "area": "Product scope",
-      "requiredEvidence": "Approve local-only scope. Before accounts/cloud campaigns/GEO/analytics/AI launch, require tenant isolation, SSO/MFA/RBAC, audit trails, retention/deletion and supplier/privacy reviews.",
+      "requiredEvidence": "Approve actual individual-account/cloud-design/dynamic-link/hosted-content/AI scope and intended billing activation. Enterprise rollout requires tenant isolation, SSO/MFA/RBAC, audit trails, retention/deletion and supplier/privacy reviews with real operational evidence.",
       "bindToSource": true
     }
   ]

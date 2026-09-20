@@ -11,6 +11,7 @@ const excluded = new Set([
   ".next",
   ".git",
   ".workflows",
+  ".superpowers",
   ".wrangler",
   ".vercel",
   ".expo",

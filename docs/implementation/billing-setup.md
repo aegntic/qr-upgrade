@@ -2,6 +2,8 @@
 
 Billing is credential gated and disabled unless `BILLING_ENABLED=true`. No live Stripe resources, charges, merchant identity, or public plan benefits were created by this implementation. Free quotas remain unchanged. The merchant owner must confirm the legal business identity, jurisdiction, settlement account, tax handling, refund/cancellation policy, support details, commercial offers, and quota entitlements before enabling charges. These decisions are pending.
 
+On 20 September 2026 the owner authorized Stripe CLI access to the existing sandbox. A read-only price-list request succeeded. Its existing prices belong to another product; they are not QR Upgrade offers. CLI authorization does not supply the deployed application's secret key or activate checkout. Google sign-in, dedicated QR Upgrade prices, server secrets and isolated sandbox storage remain prerequisites for an end-to-end billing test.
+
 ## Configuration and provider steps
 
 1. Apply `workers/qr-service/migrations/0005_billing.sql` to the intended D1 database. Route `/billing`, `/billing/customer`, `/billing/checkout`, and `/billing/events` through the Worker's existing `SERVICE_SECRET` bearer gate before `billingRequest`.

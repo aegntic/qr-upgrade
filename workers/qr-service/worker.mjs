@@ -1,6 +1,7 @@
 import { cloudRequest } from "./cloud.mjs";
 import { linksRequest, resolveLink } from "./links.mjs";
 import { contentRequest, assetRequest, publicContent } from "./content.mjs";
+import { billingRequest } from "./billing.mjs";
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const hash = /^[a-f0-9]{64}$/;
 const styles = { steel: 'sculpted obsidian and polished brushed steel, white studio backlighting', glass: 'luminous coloured glass, translucent sculptural forms, bright reflections', botanical: 'intricate botanical leaves, delicate flowers, cream paper, forest tones', illustrated: 'bold editorial illustration, strong geometric shapes, crisp composition' };
@@ -45,6 +46,7 @@ export default {
    if(url.pathname==='/content'||url.pathname.startsWith('/content/'))return await contentRequest(request,env);
    if(url.pathname==='/content-assets'||url.pathname.startsWith('/content-assets/'))return await assetRequest(request,env);
    if(url.pathname.startsWith('/public-content/'))return await publicContent(request,env);
+   if(url.pathname==='/billing'||url.pathname.startsWith('/billing/'))return await billingRequest(request,env);
    if(url.pathname.startsWith('/cloud/'))return await cloudRequest(request,env);
    if(url.pathname==='/art'&&request.method==='GET'){
     const id=url.searchParams.get('id'),owner=request.headers.get('x-qr-owner');

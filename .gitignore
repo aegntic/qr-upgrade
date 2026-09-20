@@ -10,3 +10,5 @@ compliance/evidence/
 .workflows/
 .wrangler/
 .dev.vars*
+
+.superpowers/
