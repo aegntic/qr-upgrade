@@ -27,7 +27,13 @@ export interface State {
 }
 export interface Rollup { bucket: number; producer: Producer; route: Route; status: '5xx' | 'none'; outcome: Outcome; count: number }
 const BUCKET = 300;
-export const PUBLIC_MARKER = '<link rel="canonical" href="https://qrupgrade.com/"';
+// Next 15 can stream metadata after the rendered page. Bound inspection independently of body size.
+export const PUBLIC_BODY_LIMIT = 256 * 1024;
+export const PUBLIC_MARKER = '<link rel="canonical" href="https://qrupgrade.com"/>';
+export const PUBLIC_PAGE_MARKER = '<main id="main" class="foundation-page">';
+const publicCanonical = /<link rel="canonical" href="https:\/\/qrupgrade\.com\/?"\/?>/;
+// Enough overlap for either complete fixed marker, including the optional canonical URL slash.
+const publicOverlap = Math.max(PUBLIC_MARKER.length + 1, PUBLIC_PAGE_MARKER.length) - 1;
 const production = { web: 'qr-upgrade-web', service: 'qr-upgrade-service', publicUrl: 'https://qrupgrade.com/' } as const;
 // Only createOperations({isolated: true, ...}) in an isolated local/deployed test entry point.
 // The exported production Worker never reads endpoint/producer overrides from environment or requests.
@@ -127,17 +133,24 @@ export async function probe(fetcher: (init: RequestInit) => Promise<Response>, w
   if (response.status !== 200) return 'probe_http';
   if (web && !webHeaders(response.headers)) return 'probe_shape';
   if (!reader) return 'probe_shape';
-  const decoder = new TextDecoder(); let body = '', size = 0;
+  const decoder = new TextDecoder(); let body = '', size = 0, overlap = '', pageFound = false, canonicalFound = false;
+  const limit = web ? PUBLIC_BODY_LIMIT : 16384;
   while (true) {
    const chunk = await reader.read();
    if (chunk.done) break;
-   const remaining = 16384 - size;
+   const remaining = limit - size;
    if (!web && chunk.value.byteLength > remaining) return 'probe_shape';
    const prefix = chunk.value.subarray(0, remaining);
    size += prefix.byteLength;
-   body += decoder.decode(prefix, { stream: true });
-   if (web && body.includes(PUBLIC_MARKER)) return 'none';
-   if (web && size === 16384) return 'probe_shape';
+   const decoded = decoder.decode(prefix, { stream: true });
+   if (web) {
+    const window = overlap + decoded;
+    pageFound ||= window.includes(PUBLIC_PAGE_MARKER);
+    canonicalFound ||= publicCanonical.test(window);
+    if (pageFound && canonicalFound) return 'none';
+    overlap = window.slice(-publicOverlap);
+    if (size === limit) return 'probe_shape';
+   } else body += decoded;
   }
   if (web) return 'probe_shape';
   // Flush any trailing partial UTF-8 sequence before strict whole-body validation.

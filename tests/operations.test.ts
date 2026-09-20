@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { sanitize, persistTail, advance, transition, retention, sendOne, probe, createOperations, PUBLIC_MARKER, type State, type Env, type Database } from '../workers/operations/worker';
+import { sanitize, persistTail, advance, transition, retention, sendOne, probe, createOperations, PUBLIC_MARKER, PUBLIC_PAGE_MARKER, PUBLIC_BODY_LIMIT, type State, type Env, type Database } from '../workers/operations/worker';
 import serviceWorker from '../workers/qr-service/worker.mjs';
 import { contentSecurityPolicy } from '../src/lib/security/headers';
 const migration = readFileSync(new URL('../workers/operations/migrations/0001_operations.sql',import.meta.url),'utf8');
@@ -28,7 +28,7 @@ function fixture() {
 }
 const trace=(status=500,outcome:unknown='ok',url:unknown='https://qrupgrade.com/api/art?private=canary',scriptName='qr-upgrade-web')=>({scriptName,outcome,event:{request:{url},response:{status}}});
 const headers={'content-security-policy':contentSecurityPolicy('a'.repeat(24),true),'cache-control':'private, no-store'};
-const goodWeb=()=>new Response(PUBLIC_MARKER+' />',{headers});
+const goodWeb=()=>new Response(PUBLIC_PAGE_MARKER+PUBLIC_MARKER,{headers});
 async function tick(f:ReturnType<typeof fixture>,bucket:number,failed:boolean,component='web_probe',errors=0,healthy=!failed){const old=f.state(component);await transition(f.db,old,advance(old,bucket,bucket+1,failed?'probe_http':'none',errors,healthy));}
 async function open(f:ReturnType<typeof fixture>){await tick(f,300,true);await tick(f,600,true);}
 
@@ -107,7 +107,7 @@ test('probes verify actual production CSP, marker, status, fixed service shape, 
  assert.equal(await probe(async()=>new Response(PUBLIC_MARKER,{headers:{...headers,'content-security-policy':contentSecurityPolicy('a'.repeat(24),false)}}),true),'probe_shape');
  assert.equal(await probe(async()=>Response.json({ready:true}),false),'none');assert.equal(await probe(async()=>Response.json({ready:true,model:'secret'}),false),'probe_shape');
  assert.equal(await probe(async()=>new Response('x'.repeat(16385),{headers}),true),'probe_shape');
- let cancelled=0;const stream=new ReadableStream<Uint8Array>({start(c){c.enqueue(new TextEncoder().encode(PUBLIC_MARKER));},cancel(){cancelled++;}});
+ let cancelled=0;const stream=new ReadableStream<Uint8Array>({start(c){c.enqueue(new TextEncoder().encode(PUBLIC_PAGE_MARKER+PUBLIC_MARKER));},cancel(){cancelled++;}});
  assert.equal(await probe(async()=>new Response(stream,{headers}),true),'none');assert.equal(cancelled,1);
  const hanging=new ReadableStream<Uint8Array>({cancel(){cancelled++;}});assert.equal(await probe(async()=>new Response(hanging,{headers}),true,5),'probe_timeout');assert.equal(cancelled,2);
  assert.equal(await probe(()=>new Promise(()=>{}),true,5),'probe_timeout');
@@ -155,29 +155,59 @@ test('runtime catch-up is limited to twelve completed buckets and cannot apply f
  const before=f.state('web_runtime').revision;await app.scheduled({scheduledTime:300000},f.env);assert.equal(f.state('web_runtime').revision,before);f.sqlite.close();
 });
 
-test('public probe is chunk-partition invariant within its byte prefix and cancels remainder',async()=>{
+test('public probe verifies the rendered homepage and complete apex metadata within a chunk-invariant byte prefix',async()=>{
  const encode=(value:string)=>new TextEncoder().encode(value);
  async function streamed(body:Uint8Array,parts:number[]){
   let offset=0,index=0,cancelled=0;
   const stream=new ReadableStream<Uint8Array>({pull(c){const length=parts[index++]??body.length;c.enqueue(body.subarray(offset,offset+length));offset+=length;},cancel(){cancelled++;}});
-  const result=await probe(async()=>new Response(stream,{headers}),true,1000);assert.equal(cancelled,1);return result;
+  const result=await probe(async()=>new Response(stream,{headers}),true);assert.equal(cancelled,1);return result;
  }
- for(const offset of [0,200,16384-PUBLIC_MARKER.length]){
-  const bytes=encode('x'.repeat(offset)+PUBLIC_MARKER+'x'.repeat(20000));
-  for(const parts of [[],[200],[offset+5,3,7,11],[...Array.from({length:16500},()=>1)]])assert.equal(await streamed(bytes,parts),'none');
+ for(const canonical of [PUBLIC_MARKER,'<link rel="canonical" href="https://qrupgrade.com/"/>','<link rel="canonical" href="https://qrupgrade.com">','<link rel="canonical" href="https://qrupgrade.com/">']){
+  for(const offset of [PUBLIC_PAGE_MARKER.length,200,140894,PUBLIC_BODY_LIMIT-canonical.length]){
+   const bytes=encode(PUBLIC_PAGE_MARKER+'x'.repeat(offset-PUBLIC_PAGE_MARKER.length)+canonical+'x'.repeat(20000));
+   for(const parts of [[],[200],[offset+5,3,7,11],[...Array.from({length:300},()=>1)]])assert.equal(await streamed(bytes,parts),'none');
+  }
  }
- for(const offset of [16384-PUBLIC_MARKER.length+1,16384,20000]){
-  const bytes=encode('x'.repeat(offset)+PUBLIC_MARKER+'x'.repeat(100));
-  for(const parts of [[],[5000,5000,5000],[16383,1,1000]])assert.equal(await streamed(bytes,parts),'probe_shape');
+ for(const offset of [PUBLIC_BODY_LIMIT-PUBLIC_MARKER.length+1,PUBLIC_BODY_LIMIT,PUBLIC_BODY_LIMIT+1000]){
+  const bytes=encode(PUBLIC_PAGE_MARKER+'x'.repeat(offset-PUBLIC_PAGE_MARKER.length)+PUBLIC_MARKER+'x'.repeat(100));
+  for(const parts of [[],[5000,5000,5000],[PUBLIC_BODY_LIMIT-1,1,1000]])assert.equal(await streamed(bytes,parts),'probe_shape');
  }
- assert.equal(await streamed(encode('x'.repeat(20000)),[]),'probe_shape');
- // A valid service prefix followed by extra content remains invalid, regardless of chunks.
+ assert.equal(await streamed(encode('x'.repeat(PUBLIC_BODY_LIMIT+1000)),[]),'probe_shape');
+ // The observed Next output was 248,494 bytes, with a no-slash canonical at approximately 140,894.
+ const observedShape=PUBLIC_PAGE_MARKER+'x'.repeat(140894-PUBLIC_PAGE_MARKER.length)+PUBLIC_MARKER;
+ const largePage=encode(observedShape+'x'.repeat(248494-observedShape.length));
+ assert.equal(await streamed(largePage,[]),'none');assert.equal(await streamed(largePage,[16384,100000,24520,1,1,1]),'none');
+ // UTF-8 counts bytes, not characters, and the scanner retains only fixed overlap between chunks.
+ const unicodePage=encode(PUBLIC_PAGE_MARKER+'é'.repeat(100000)+PUBLIC_MARKER);
+ assert.equal(await streamed(unicodePage,[PUBLIC_PAGE_MARKER.length+1,1,777]),'none');
+ assert.equal(await streamed(encode(PUBLIC_PAGE_MARKER+'é'.repeat(150000)+PUBLIC_MARKER),[]),'probe_shape');
+ // Both marker orders work, with the render marker itself split or at/across the byte ceiling.
+ for(const offset of [PUBLIC_MARKER.length,PUBLIC_BODY_LIMIT-PUBLIC_PAGE_MARKER.length,PUBLIC_BODY_LIMIT-PUBLIC_PAGE_MARKER.length+1]){
+  const body=encode(PUBLIC_MARKER+'x'.repeat(offset-PUBLIC_MARKER.length)+PUBLIC_PAGE_MARKER+'x'.repeat(1000));
+  for(const parts of [[],[PUBLIC_MARKER.length-1,2,offset-PUBLIC_MARKER.length+5,1,1]])assert.equal(await streamed(body,parts),offset+PUBLIC_PAGE_MARKER.length<=PUBLIC_BODY_LIMIT?'none':'probe_shape');
+ }
  for(const parts of [[],[14]]){
   const body=encode('{"ready":true}'+'x'.repeat(20000));let offset=0,index=0;
   const stream=new ReadableStream<Uint8Array>({pull(c){if(offset>=body.length){c.close();return;}const length=parts[index++]??body.length;c.enqueue(body.subarray(offset,offset+length));offset+=length;}});
   assert.equal(await probe(async()=>new Response(stream),false),'probe_shape');
  }
  assert.equal(await probe(async()=>new Response(new Uint8Array([...encode('{"ready":true}'),0xc2])),false),'probe_shape');
+});
+
+test('public probe rejects shell-only responses, wrong canonical identity and truncated renderer markers',async()=>{
+ for(const body of [
+  '', '<html><body>Application shell</body></html>', PUBLIC_MARKER, PUBLIC_PAGE_MARKER,
+  PUBLIC_PAGE_MARKER+'<link rel="canonical" href="https://qrupgrade.com.evil.example"/>',
+  PUBLIC_PAGE_MARKER+'<link rel="canonical" href="https://qrupgrade.com/account"/>',
+  PUBLIC_PAGE_MARKER+'<link rel="canonical" href="https://qrupgrade.com/?anything"/>',
+  PUBLIC_PAGE_MARKER+'<link rel="canonical" href="http://qrupgrade.com"/>',
+  PUBLIC_PAGE_MARKER+'<link rel="canonical" href="https://qrupgrade.com"',
+  PUBLIC_PAGE_MARKER.slice(0,-1)+PUBLIC_MARKER,
+  '<main id="main" class="error-page">'+PUBLIC_MARKER,
+ ])assert.equal(await probe(async()=>new Response(body,{headers}),true),'probe_shape');
+ assert.equal(await probe(async()=>new Response(PUBLIC_MARKER+PUBLIC_PAGE_MARKER,{headers}),true),'none');
+ // The marker is emitted by the actual route renderer, not a middleware/header stamp.
+ assert.ok(readFileSync(new URL('../src/app/page.tsx',import.meta.url),'utf8').includes(PUBLIC_PAGE_MARKER.replace('class=', 'className=')));
 });
 
 const components=['web_probe','service_probe','web_runtime','service_runtime'] as const;
