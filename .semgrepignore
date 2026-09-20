@@ -1,0 +1,9 @@
+node_modules/
+.next/
+mobile/node_modules/
+mobile/dist/
+mobile/android/
+mobile/ios/
+research/
+compliance/evidence/
+tests/

@@ -127,6 +127,9 @@ export default function AiArtPanel({ onApply }: { onApply: (image: string) => vo
     setError("");
     setStatus("submitting");
     try {
+      // Refresh the acknowledged owner lease before spending an attempt.
+      const bootstrap = await fetch("/api/art", { signal: controller.signal, cache: "no-store" });
+      if (!bootstrap.ok) throw new Error("Could not prepare your session. Check your connection and try again.");
       const response = await fetch("/api/art", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

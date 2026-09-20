@@ -56,7 +56,7 @@ const benefits = [
   {
     icon: Download,
     title: "Take the whole design",
-    text: "Download PNG, an SVG image document or an RGB PDF at your chosen print width.",
+    text: "Download PNG, JPG, WebP, SVG or RGB PDF with your chosen name and print width.",
   },
   {
     icon: ImagePlus,
@@ -70,7 +70,7 @@ const questions = [
     items: [
       [
         "What can I share with a QR code?",
-        "A website or public link, Wi-Fi network details, or a contact card. The destination shortcuts help you start with common links such as Instagram, LinkedIn, menus, PDFs and playlists.",
+        "A public link, Wi-Fi network, contact, text, phone call, SMS, email, event or location. The destination shortcuts help you start with common links such as Instagram, LinkedIn, menus, PDFs and playlists.",
       ],
       [
         "Do these QR codes expire?",
@@ -91,7 +91,7 @@ const questions = [
     items: [
       [
         "What is the difference between the three modes?",
-        "Custom QR gives you a clean pattern with editable colours and shapes. Image QR uses your uploaded picture. QR Art starts with one of our AI-created artwork examples. All three are checked before export.",
+        "Custom QR gives you a clean pattern with editable colours and shapes. Image QR uses your uploaded picture. QR Art generates original artwork from your prompt or starts with a library image. All three are checked before export.",
       ],
       [
         "Can I put a logo or photo in the centre?",
@@ -99,11 +99,11 @@ const questions = [
       ],
       [
         "Can I generate a new artwork from a prompt?",
-        "The current generator offers ready-made AI-created artwork and local image uploads. Live prompt-to-image generation is planned and is not available in this baseline.",
+        "Yes. Describe your artwork in QR Art, choose a visual direction and generate. Only your prompt and style go to Cloudflare; your QR destination is integrated locally. The beta allows three attempts per network each UTC day.",
       ],
       [
         "Which download formats are included?",
-        "PNG, SVG and RGB PDF. Custom QR exports without a centre image use vector SVG. Image, artwork and logo designs use an SVG document containing the complete raster image. The PDF uses your selected QR print width.",
+        "PNG, JPG, WebP, SVG and RGB PDF. Uncomposed Custom QR exports use vector SVG. Image, artwork and logo designs use an SVG document containing the complete raster image. The PDF uses your selected QR print width.",
       ],
       [
         "What should I do if the scan check fails?",
@@ -116,7 +116,7 @@ const questions = [
     items: [
       [
         "Are my images uploaded to a server?",
-        "No. The current generator processes your selected image and QR content locally in your browser. Reset clears the draft. Files you download or share remain under your control.",
+        "Selected images and QR content are processed locally. AI generation sends your prompt and style to Cloudflare only when you choose Generate. Save design explicitly stores the complete draft in this browser; clearing site data removes saved designs.",
       ],
       [
         "Can I track scans or add a password?",

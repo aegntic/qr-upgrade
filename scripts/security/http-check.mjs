@@ -62,6 +62,9 @@ try {
     );
   for (const route of [
     "/generator",
+    "/designs",
+    "/cloud-designs",
+    "/account",
     "/scan-lab",
     "/templates",
     "/docs",

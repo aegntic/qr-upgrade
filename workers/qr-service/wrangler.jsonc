@@ -3,6 +3,8 @@
   "main": "worker.mjs",
   "compatibility_date": "2026-09-19",
   "workers_dev": true,
+  "preview_urls": false,
+  "r2_buckets": [{"binding":"ASSETS","bucket_name":"qr-upgrade-private"}],
   "account_id": "548a933e3812ca9cd840b787ca7e1eb1",
   "ai": { "binding": "AI" },
   "d1_databases": [{"binding":"DB","database_name":"qr-upgrade","database_id":"78cddae0-5174-4a8f-910a-a814e60815cd","migrations_dir":"migrations"}],

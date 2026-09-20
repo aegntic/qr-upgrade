@@ -25,7 +25,7 @@ export function createArtHandler(config: ArtConfig) {
   if(request.method==='GET'&&!url.searchParams.has('id')){
    const cookie=request.headers.get('cookie')?.match(/(?:^|;\s*)qr-art-session=([a-f0-9]{64})(?:;|$)/)?.[1];
    const session=cookie||randomBytes(32).toString('hex');
-   return respond({enabled,dailyLimit:3,provider:'Cloudflare Workers AI',model:'FLUX.1 Schnell'},200,cookie?{}:{'Set-Cookie':`${COOKIE}=${session}; HttpOnly; SameSite=Strict; Path=/api/art; Max-Age=3600${config.production?'; Secure':''}`});
+   return respond({enabled,dailyLimit:3,provider:'Cloudflare Workers AI',model:'FLUX.1 Schnell'},200,{'Set-Cookie':`${COOKIE}=${session}; HttpOnly; SameSite=Strict; Path=/api/art; Max-Age=7200${config.production?'; Secure':''}`});
   }
   if(!enabled)return respond({error:'Live artwork generation is not configured.'},503);
   const cookie=request.headers.get('cookie')?.match(/(?:^|;\s*)qr-art-session=([a-f0-9]{64})(?:;|$)/)?.[1];

@@ -4,7 +4,7 @@ export const description =
 export const faqs = [
   {
     q: "What are the three creation modes?",
-    a: "The web generator offers Custom QR with editable colours, module shapes and 15 templates; Image QR using your own picture; and QR Art with 14 ready-made AI-created artworks. It includes logo/photo upload, 18 destination shortcuts, optional UTM tags for website links, and PNG, SVG and RGB PDF downloads.",
+    a: "The web generator offers Custom QR with editable colours, module shapes and 15 templates; Image QR using your own picture; and QR Art with original prompt-based generation plus 14 library artworks. It includes centre portraits, image crop and composition controls, captions, 24 destination shortcuts, local design saving, and PNG, JPG, WebP, SVG and RGB PDF downloads.",
   },
   {
     q: "What is a QR image?",
@@ -12,7 +12,7 @@ export const faqs = [
   },
   {
     q: "Can I create a unique image from a prompt?",
-    a: "Live text-to-image generation is not connected yet. This preview includes 14 AI-created artwork directions and supports your own uploaded image. You can encode a website, Wi-Fi network or contact into that image locally.",
+    a: "Yes. Describe an artwork and choose a material direction in QR Art. Cloudflare Workers AI generates an image, then the browser integrates and validates your QR destination. The beta allows three generation attempts per network each UTC day, with a shared daily allowance. Library images and local uploads remain available without generation.",
   },
   {
     q: "What does image validation check?",
@@ -24,11 +24,11 @@ export const faqs = [
   },
   {
     q: "What is included in the download?",
-    a: "The web generator offers PNG, SVG and RGB PDF. Custom QR without a centre image uses vector SVG; other SVG exports embed the raster image. Artwork and clear borders are included. Captions and scene previews are outside the downloaded image. The native preview supports PNG and PDF.",
+    a: "The web generator offers PNG, JPG, WebP, SVG and RGB PDF with a custom filename. Uncomposed Custom QR uses vector SVG; artwork, portrait and caption compositions embed a raster. Captions and clear borders are included; placement scenes are excluded. Lossy exports are decoded after encoding. The native preview supports PNG and PDF.",
   },
   {
     q: "Where do my images and QR content go?",
-    a: "The current editor processes your image and destination locally without uploading either to a server. There is no account or campaign storage. Downloads remain under your control. Anyone scanning a Wi-Fi QR can read its credentials.",
+    a: "Your selected images and QR destination are processed locally. Save design explicitly stores them in this browser, including any Wi-Fi or contact details; clearing site data removes local saves. Generating AI artwork sends only the prompt and style to Cloudflare. Results are available for one hour and removed by an hourly cleanup; hashed job and quota metadata is retained for up to three days. Anyone scanning a Wi-Fi QR can read its credentials.",
   },
   {
     q: "Will the finished QR work on every phone?",
@@ -36,7 +36,7 @@ export const faqs = [
   },
   {
     q: "Are dynamic links and team workspaces available?",
-    a: "They are planned. Current exports encode your destination directly, so changing it requires a new QR image. Subscriptions, cloud brand kits, analytics and live image generation are not active.",
+    a: "They are planned. Current exports encode your destination directly, so changing it requires a new QR image. Subscriptions, cloud brand kits and scan analytics are not active.",
   },
 ];
 export const sources = [
@@ -55,10 +55,10 @@ export const sources = [
   },
   { label: "jsQR: image decoding", url: "https://github.com/cozmo/jsQR" },
 ];
-export const summary = `# QR Upgrade\n\n> ${description}\n\nStatus: working preview, not a launched subscription service.\n\n## Product\n- [QR Studio](${site}/generator): Create URL, Wi-Fi, and vCard QR codes.\n- [Scan Lab](${site}/scan-lab): Preview placement and inspect print settings.\n- [Methodology](${site}/docs): Scoring, decoding, and limitations.\n- [Product facts](${site}/ai): Current capabilities and planned features.\n- [Full reference](${site}/llms-full.txt): Public first-party product information.\n\nNo private uploads, passwords, campaign data, or customer information is included here.\n`;
+export const summary = `# QR Upgrade\n\n> ${description}\n\nStatus: working preview, not a launched subscription service.\n\n## Product\n- [QR Studio](${site}/generator): Create artistic QR images for links, Wi-Fi, contacts, messages, email, events and locations.\n- [Scan Lab](${site}/scan-lab): Preview placement and inspect print settings.\n- [Methodology](${site}/docs): Scoring, decoding, and limitations.\n- [Product facts](${site}/ai): Current capabilities and planned features.\n- [Full reference](${site}/llms-full.txt): Public first-party product information.\n\nNo private uploads, passwords, campaign data, or customer information is included here.\n`;
 export const fullFacts =
   summary +
   "\n## Questions and answers\n" +
   faqs.map((f) => `\n### ${f.q}\n${f.a}\n`).join("") +
-  `\n## Image creation and validation\nThe 14 example artworks were created during development with an image-generation tool using a QR structural reference. They are not generated on demand. The editor center-crops the selected image, integrates an H-error-correction QR pattern with a four-module quiet zone, and protects reserved structures and adjustable sampling areas. On web the working artwork is 768 pixels square. Native uses a 512-pixel working image. Enlarging an export does not create new source detail.\n\nWeb decoding: one engine (jsQR), exact payload comparison on the original, a 256-pixel reduction, and a controlled blur/downsampling/rotation simulation. All must pass alongside print-size checks before download. The native app decodes the captured image before export; it does not provide the web stress simulation. Physical width includes the quiet zone. Conservative planning checks use minimum module width 0.40 mm and a 10:1 viewing-distance-to-width ratio. These are heuristics, not calibrated device performance or ISO verification.\n\nScene photos are placement references; their lighting, texture, perspective and physical scale are not inferred automatically. The baseline generator offers PNG, SVG and RGB PDF exports, including the complete QR design. Custom QR without a centre image is vector SVG; SVG exports with artwork or a centre image embed a raster. The baseline uses a fixed 40 cm reference scan distance; Scan Lab provides adjustable simulation settings. Preview captions and scenes are excluded.\n\n## Roadmap\nLive prompt-to-image generation with QR structural conditioning, multi-engine validation, dynamic links, geographic routing, saved brand kits, billing, teams, analytics, AR and CMYK proofing remain planned. Proposed prices are not active offers.\n\n## Discovery\nPublic pages use semantic HTML, canonical links, metadata and relevant JSON-LD. llms.txt is an optional discovery convention, not a guarantee of crawling, indexing, ranking or AI citations.\n\n## Sources\n` +
+  `\n## Image creation and validation\nThe prepared library artworks were created during development with a QR structural reference. Original prompt-based artwork uses Cloudflare Workers AI (FLUX.1 Schnell); the generated image is not assumed scannable. The editor crops and adjusts the selected image, integrates an H-error-correction QR pattern with a four-module quiet zone, and protects reserved structures and adjustable sampling areas. On web the working artwork is 768 pixels square. Native uses a 512-pixel working image. Enlarging an export does not create new source detail.\n\nWeb decoding: one engine (jsQR), exact payload comparison on the original, a 256-pixel reduction, and a controlled blur/downsampling/rotation simulation. All must pass alongside print-size checks before download. The native app decodes the captured image before export; it does not provide the web stress simulation. Physical width includes the quiet zone. Conservative planning checks use minimum module width 0.40 mm and a 10:1 viewing-distance-to-width ratio. These are heuristics, not calibrated device performance or ISO verification.\n\nScene photos are placement references; their lighting, texture, perspective and physical scale are not inferred automatically. The generator offers PNG, JPG, WebP, SVG and RGB PDF exports including the complete composed QR design. Uncomposed Custom QR is vector SVG; artwork, portrait and caption SVG exports embed a raster. The baseline uses a fixed 40 cm reference scan distance; Scan Lab provides adjustable simulation settings. Studio captions are included; placement scenes are excluded. My designs stores explicit browser-local saves with five previous versions, rename, duplicate, archive and restore. Scan Lab receives the exact composed image and supports returning to its editable draft.\n\n## Roadmap\nModel-native QR structural conditioning, multi-engine validation, dynamic links, geographic routing, saved brand kits, billing, teams, analytics, AR and CMYK proofing remain planned. Proposed prices are not active offers.\n\n## Discovery\nPublic pages use semantic HTML, canonical links, metadata and relevant JSON-LD. llms.txt is an optional discovery convention, not a guarantee of crawling, indexing, ranking or AI citations.\n\n## Sources\n` +
   sources.map((s) => `- [${s.label}](${s.url})`).join("\n");

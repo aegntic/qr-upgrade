@@ -82,3 +82,12 @@ test('scheduled cleanup removes expired images but retains same-day quota rows',
   assert.deepEqual(rows,[{id:'same-day',created_at:now-2*3600000,state:'expired',image:null}]);
  }finally{Date.now=realNow;}
 });
+
+test('acknowledged bootstrap renews the same owner beyond a new job recovery window',async()=>{
+ const handler=createArtHandler(cfg);
+ const value='b'.repeat(64);
+ const response=await handler(new Request('https://qrupgrade.com/api/art',{headers:{cookie:'qr-art-session='+value}}));
+ const renewed=response.headers.get('set-cookie')!;
+ assert.ok(renewed.includes('qr-art-session='+value));
+ assert.match(renewed,/Max-Age=7200/);
+});

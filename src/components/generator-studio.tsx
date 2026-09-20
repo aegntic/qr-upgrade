@@ -42,6 +42,7 @@ import { artworkDesigns } from "@/lib/artwork-designs";
 import { DestinationIcon } from "./destination-icon";
 import { QrPreviewDialog } from "./qr-preview-dialog";
 import AiArtPanel from "./ai-art-panel";
+import CloudSave from "./cloud-save";
 import "../app/composition.css";
 import artProofs from "@/lib/artwork-proofs.json";
 import {
@@ -95,7 +96,7 @@ const modes = [
 export default function GeneratorStudio({
   initialArtwork,
   brandStudy: incomingBrandStudy,
-  resume = false,
+  resume = true,
   resumeRequested = false,
   initialType = "website",
   initialMode,
@@ -116,6 +117,8 @@ export default function GeneratorStudio({
   const [savedId, setSavedId] = useState(seed ? workflow.savedId : undefined);
   const [name, setName] = useState(seed?.name || 'Untitled QR');
   const [saving, setSaving] = useState(false);
+  const [cloudSaving, setCloudSaving] = useState(false);
+  const [cloudId, setCloudId] = useState(seed?.cloudId);
   const [destinationQuery, setDestinationQuery] = useState('');
   const [designQuery, setDesignQuery] = useState("");
   const [adjustments, setAdjustments] = useState(seed?.adjustments || defaultImageAdjustments);
@@ -309,10 +312,10 @@ export default function GeneratorStudio({
   );
 
   const draft = useMemo<EditorDraft>(() => ({
-    version: 1, kind, content, mode, appearance, template, art, brandStudy, studyActive,
+    version: 1, cloudId, kind, content, mode, appearance, template, art, brandStudy, studyActive,
     customImage, logo, logoSize, logoFrame, strength, sizeMm, showUtm, utm, adjustments, caption, name,
     destinationDrafts: { ...destinationDrafts.current },
-  }), [kind, content, mode, appearance, template, art, brandStudy, studyActive, customImage, logo, logoSize, logoFrame, strength, sizeMm, showUtm, utm, adjustments, caption, name]);
+  }), [cloudId, kind, content, mode, appearance, template, art, brandStudy, studyActive, customImage, logo, logoSize, logoFrame, strength, sizeMm, showUtm, utm, adjustments, caption, name]);
   const artifact = useMemo(() => current && encoded.matrix && !uploadsBusy ? {
     png: current.png, svg: current.svg, text: encoded.text, sizeMm, modules: encoded.matrix.size,
     pristine: current.pristine, reduced: current.reduced, simulated: current.simulated, dimensionsPass,
@@ -425,7 +428,7 @@ export default function GeneratorStudio({
     }
   }
   function reset() {
-    if (saving) return;
+    if (saving || cloudSaving) return;
     stateEpoch.current++;
     destinationDrafts.current = {};
     setAttemptedDestination(false);
@@ -433,6 +436,7 @@ export default function GeneratorStudio({
     uploads.current.logo++;
     setContent(initialContent);
     setSavedId(undefined);
+    setCloudId(undefined);
     setName("Untitled QR");
     setAdjustments(defaultImageAdjustments);
     setCaption(defaultCaption);
@@ -1016,7 +1020,7 @@ export default function GeneratorStudio({
               className="preview-jump"
               onClick={() => goToHeading(previewHeading.current)}
             >
-              Preview & download <ArrowDown size={15} />
+              Preview &amp; download <ArrowDown size={15} />
             </button>
           </section>
           <input
@@ -1176,13 +1180,14 @@ export default function GeneratorStudio({
                     : `${format.toUpperCase()} image · scan-checked after encoding.`}
             </p>
             <div className="workflow-save-panel">
-              <label className="generator-field"><span>Design name & file name</span><input value={name} maxLength={80} onChange={e=>setName(e.target.value)}/></label>
+              <label className="generator-field"><span>Design name &amp; file name</span><input value={name} maxLength={80} onChange={e=>setName(e.target.value)}/></label>
               <button className="workflow-wide" disabled={!artifact || uploadsBusy} onClick={testDesign}>Test this design <ArrowRight size={16}/></button>
               <button className="workflow-wide" disabled={!artifact || saving || uploadsBusy} onClick={()=>void save()}>{saving ? 'Saving…' : savedId ? 'Save new version' : 'Save design'}</button>
               <Link href="/designs">My designs ↗</Link>
+              <CloudSave draft={draft} artifact={artifact} disabled={saving || uploadsBusy} onSaved={setCloudId} onBusy={setCloudSaving}/>
               <p className="generator-note">Save keeps the destination, images and any credentials in this browser. Clearing site data removes saved designs.</p>
             </div>
-            <button className="generator-reset" disabled={saving} onClick={reset}>
+            <button className="generator-reset" disabled={saving || cloudSaving} onClick={reset}>
               <RotateCcw size={12} /> Reset design
             </button>
             {samplePortrait &&
@@ -1191,7 +1196,7 @@ export default function GeneratorStudio({
               )}
             <div className="generator-private">
               <ShieldCheck size={14} />
-              <span>No account. No image uploads to a server.</span>
+              <span>Create without an account. Cloud saving is optional.</span>
             </div>
           </div>
         </aside>

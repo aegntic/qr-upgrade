@@ -9,6 +9,7 @@ export const defaultCaption: Caption = { text: '', color: '#ffffff', font: 'sans
 export type Study = { id: string; name: string; destination: string; strength: number };
 export type EditorDraft = {
   version: 1;
+  cloudId?: string;
   kind: DestinationId;
   content: Content;
   mode: GeneratorMode;

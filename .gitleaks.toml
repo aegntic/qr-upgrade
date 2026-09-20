@@ -1,0 +1,10 @@
+title = "QR Upgrade secret scan"
+[extend]
+useDefault = true
+[[allowlists]]
+description = "Dependencies, build outputs, private evidence, and third-party design research"
+paths = ['''(^|/)(node_modules|\.next|\.expo|dist|build|Pods|\.git)/''', '''^compliance/evidence/''', '''^research/appllama/(img/|references\.json|contact)''']
+
+[[allowlists]]
+description = "Git-ignored local runtime secret store; never a deployment source"
+paths = ['''^\.env\.local$''']

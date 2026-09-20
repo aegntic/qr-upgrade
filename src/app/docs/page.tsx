@@ -32,16 +32,12 @@ export default function Docs() {
       </p>
       <p>
         The 14 example artworks were generated during development with a QR
-        structural reference. Select one or upload your own image. The editor
-        center-crops the image, encodes your destination with high error
-        correction, and integrates the required contrast into its pixels. Live
-        prompt-to-image generation is not connected yet.
+        structural reference. Select one or upload your own image. The editor lets you crop, position and adjust the image, encodes your destination with high error correction, and integrates the required contrast into its pixels. You can also generate a new image from a prompt with Cloudflare Workers AI, then apply it to your QR. Only the description and style are sent to the image model; your destination and uploaded images are not.
       </p>
       <h2>Testing the actual image</h2>
       <p>
         The baseline uses a fixed 40 cm reference scan distance, without extra
-        blur or rotation. The separate <Link href="/scan-lab">Scan Lab</Link>{" "}
-        retains its adjustable simulation controls.
+        blur or rotation. Choose Test this design to carry the exact studio image into <Link href="/scan-lab">Scan Lab</Link> and adjust its simulation controls. Returning to the studio retains the design.
       </p>
       <p>
         The web editor uses jsQR to read the finished artwork at its working
@@ -91,12 +87,11 @@ export default function Docs() {
       <h2>Print handoff</h2>
       <p>
         The baseline also offers SVG: a true vector QR for Custom QR without a
-        centre image, or an SVG containing the complete raster image for image,
+        centre image, caption or composition adjustments, or an SVG containing the complete raster image for image,
         art and logo designs.
       </p>
       <p>
-        PNG and RGB PDF exports include the complete artwork and quiet zone.
-        Captions and scene mockups are excluded. The working image is 768 pixels
+        PNG, JPG, WebP and RGB PDF exports include the complete artwork, caption and quiet zone. Scene mockups are excluded. JPG and WebP files are decoded again after compression before download. The working image is 768 pixels
         square on web and 512 on native; larger exports resample those pixels. A
         PDF specifies your chosen physical dimensions but is not CMYK or PDF/X.
       </p>
@@ -106,6 +101,9 @@ export default function Docs() {
         ISO grade. Test a physical proof at the intended size on the final
         material with several phones.
       </p>
+      <h2>Keeping your work</h2>
+      <p>Save design stores the current destination, images and any credentials in this browser, with up to five prior versions. My designs supports search, rename, duplicate, archive and restore. Clearing site data removes these local copies. Cloud saving is a separate, explicit action and requires Google sign-in; it stays unavailable until the account connection is configured.</p>
+      <p>Generated images can be retrieved for one hour and are removed from the generation service within two hours. Applying or saving an image keeps a browser copy. Generation metadata without the prompt is retained for three days to enforce usage limits.</p>
       <h2>Parameter-check API</h2>
       <p>
         <code>POST /api/v1/scan</code> is disabled by default. When explicitly

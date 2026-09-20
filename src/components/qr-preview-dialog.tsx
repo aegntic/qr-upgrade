@@ -17,7 +17,7 @@ export function QrPreviewDialog({ open, src, onClose }: { open: boolean; src: st
         <h2 id="qr-preview-title">Full-size QR preview</h2>
         <button type="button" onClick={() => dialog.current?.close()} aria-label="Close full-size preview"><X size={18} /></button>
       </div>
-      <img src={src} width={768} height={768} alt="Full-size preview of your generated QR code" />
+      {src && <img src={src} width={768} height={768} alt="Full-size preview of your generated QR code" />}
     </dialog>
   );
 }

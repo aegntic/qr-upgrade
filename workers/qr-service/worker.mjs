@@ -1,3 +1,4 @@
+import { cloudRequest } from "./cloud.mjs";
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const hash = /^[a-f0-9]{64}$/;
 const styles = { steel: 'sculpted obsidian and polished brushed steel, white studio backlighting', glass: 'luminous coloured glass, translucent sculptural forms, bright reflections', botanical: 'intricate botanical leaves, delicate flowers, cream paper, forest tones', illustrated: 'bold editorial illustration, strong geometric shapes, crisp composition' };
@@ -37,6 +38,7 @@ export default {
   const url=new URL(request.url);
   if(url.pathname==='/health'&&request.method==='GET')return reply({ready:!!env.DB&&!!env.AI,model:env.AI_MODEL});
   try {
+   if(url.pathname.startsWith('/cloud/'))return await cloudRequest(request,env);
    if(url.pathname==='/art'&&request.method==='GET'){
     const id=url.searchParams.get('id'),owner=request.headers.get('x-qr-owner');
     if(!uuid.test(id||'')||!hash.test(owner||''))return reply({error:'Invalid job.'},400);

@@ -79,6 +79,7 @@ const tasks = [
       path.join(evidence, run, "sast.json"),
       "src",
       "shared",
+      "workers",
       "mobile/app",
       "mobile/src",
       "mobile/plugins",

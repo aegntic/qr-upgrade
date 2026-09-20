@@ -1,6 +1,6 @@
 # Gates for the next product phases
 
-The local prototype does not implement these enterprise features. G19 blocks representing them as production capabilities until the relevant implementation and evidence exist.
+The web beta implements local design workflows, bounded live AI generation, and credential-gated individual cloud accounts. These are not enterprise assurance claims. G19 blocks representing the enterprise capabilities below as complete until implementation and evidence exist. See runtime-data-flow.md for current technical scope.
 
 | Feature | Required launch checks |
 |---|---|
