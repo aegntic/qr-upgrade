@@ -1,0 +1,23 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "qr-upgrade-operations",
+  "main": "worker.ts",
+  "compatibility_date": "2026-09-20",
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": { "enabled": false },
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "vars": { "ALERTS_ENABLED": "false" },
+  "services": [{ "binding": "QR_SERVICE", "service": "qr-upgrade-service" }],
+  "d1_databases": [{
+    "binding": "OPERATIONS_DB",
+    "database_name": "qr-upgrade-operations",
+    "database_id": "REQUIRED_SEPARATE_OPERATIONS_DATABASE_ID",
+    "migrations_dir": "migrations"
+  }],
+  "send_email": [{
+    "name": "INCIDENT_EMAIL",
+    "destination_address": "aegntic.dev@gmail.com",
+    "allowed_sender_addresses": ["monitor@alerts.qrupgrade.com"]
+  }]
+}

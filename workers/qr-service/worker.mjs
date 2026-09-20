@@ -43,7 +43,13 @@ export default {
  async fetch(request,env,ctx) {
   if(!await authorised(request,env.SERVICE_SECRET))return reply({error:'Unauthorized.'},401);
   const url=new URL(request.url);
-  if(url.pathname==='/health'&&request.method==='GET')return reply({ready:!!env.DB&&!!env.AI,model:env.AI_MODEL});
+  if(url.pathname==='/health'&&request.method==='GET'){
+   try {
+    if(typeof env.DB?.prepare!=='function'||typeof env.AI?.run!=='function'||typeof env.ASSETS?.get!=='function'||typeof env.ASSETS?.put!=='function'||typeof env.AI_MODEL!=='string'||!env.AI_MODEL)return reply({ready:false},503);
+    const row=await env.DB.prepare('SELECT 1 AS ready').first();
+    return row?.ready===1?reply({ready:true}):reply({ready:false},503);
+   }catch{return reply({ready:false},503);}
+  }
   try {
    if(url.pathname.startsWith('/account/deletion/'))return await accountDeletionRequest(request,env);
    const privatePath=/^\/(cloud|links|content|content-assets)(?:\/|$)/.test(url.pathname);

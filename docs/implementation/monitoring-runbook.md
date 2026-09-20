@@ -1,0 +1,65 @@
+# QR Upgrade private operational monitoring
+
+Status: implementation and local proof only. Production producers are not attached. Alerts are disabled. Sending-domain activation is complete according to the owner’s provider record; sending messages, the sender/recipient pair and retention still require owner approval. This runbook does not authorize activation or a message.
+
+## Boundaries and provisioning
+
+The dedicated `qr-upgrade-operations` Worker receives only `qr-upgrade-web` and `qr-upgrade-service` Tail Items, runs a five-minute Cron, and owns a separate D1 database named `qr-upgrade-operations`. It has no fetch handler, public route, workers.dev endpoint, preview URL, self-tail, customer D1, R2, Queue, Durable Object or telemetry vendor. Observability remains explicitly disabled on all three Workers. Cloudflare still handles raw producer trace material transiently before the sanitizer; this is not proof of no provider metadata processing.
+
+`workers/operations/wrangler.jsonc` is an intentionally unconfigured deployment template. Replace `REQUIRED_SEPARATE_OPERATIONS_DATABASE_ID` only with the new operations D1 ID in a private candidate configuration. It is not a customer-storage fallback; deploying the unresolved identifier must fail. Keep D1 read replication disabled. Apply `workers/operations/migrations/0001_operations.sql` before the operations Worker. Store the existing QR-service bearer solely as the operations runtime secret `SERVICE_SECRET`. Do not put secrets in source, tests, evidence or email.
+
+The native `INCIDENT_EMAIL` binding specifies both `destination_address: aegntic.dev@gmail.com` and `allowed_sender_addresses: [monitor@alerts.qrupgrade.com]`. Wrangler 4.135.0 locally accepts the conjunction. This is not deployed restriction or delivery proof. `ALERTS_ENABLED` must remain the exact string `false` until owner approval and deployed checks complete; missing/unrecognized values disable delivery. No unrestricted binding or application-only fallback is permitted. Inspect any pending pre-activation notifications before enabling: enabling drains the retained outbox one due message per run.
+
+For isolated testing, use a separate entry module that exports `createOperations({ isolated: true, web: '<exact-isolated-web>', service: '<exact-isolated-service>', publicUrl: 'https://<isolated-public-host>/' })`. Supply a separate operations database, synthetic secrets and isolated QR_SERVICE binding. Override producer names/endpoints only in that reviewed test entry source; the production default ignores environment/request endpoint overrides. The public marker is the canonical apex link `<link rel="canonical" href="https://qrupgrade.com/"`, which production-rendered staging preserves. If protected staging requires additional probe authentication, prepare that only inside the isolated test entry; never weaken the production probe or accept caller URLs.
+
+## Ordered deployment and attachment gate
+
+1. Review this source and owner decisions. Provision the isolated operations D1, apply its migration and verify its four monitor rows and constrained schema. Deploy isolated health-capable service, isolated operations Worker and isolated web producer with logs disabled. Prove the operations Worker has no public endpoint and only the intended bindings.
+2. Attach only the isolated producers to isolated operations. Demonstrate actual Tail dispatch, scheduled execution, D1 privacy contents, overlapping state/outbox updates, deliberate sink failure and bounded incident/recovery behavior. Local SQLite tests do not establish deployed Tail/Cron delivery or D1 runtime behavior.
+3. Obtain explicit approval for `monitor@alerts.qrupgrade.com` → `aegntic.dev@gmail.com` and delivered incident/recovery tests. The domain is already Enabled / DNS Configured; do not create duplicate DNS/domain resources. Prove both binding restrictions independently without delivering to any unapproved address. Stop if conjunction enforcement is absent. Record API acceptance separately from actual inbox receipt.
+4. Once isolated proof and review pass, provision the separate production operations D1, apply the migration, deploy the reviewed health-capable service and operations Worker with `ALERTS_ENABLED=false`, and install its runtime service secret. Verify configuration, restrictions and current notification backlog. Enable sending only at the owner-approved activation gate.
+5. Attach the proven production QR service, then the Cloudflare web Worker during its reviewed hosting cutover. Preserve the canonical public probe across the Vercel-to-Cloudflare switch.
+
+Exact source additions, only at step 5:
+
+- In `workers/qr-service/wrangler.jsonc`, whose `name` must remain `qr-upgrade-service`, add `"tail_consumers": [{ "service": "qr-upgrade-operations" }]` at top level.
+- In `wrangler.jsonc`, whose `name` must remain `qr-upgrade-web`, add the same top-level `"tail_consumers": [{ "service": "qr-upgrade-operations" }]`.
+- Preserve each producer’s `"observability": { "enabled": false }`. Do not add wildcard names, another consumer, self-tail or a tail entry on operations. Production config files deliberately contain no attachment today; root owns applying these patches at the gate.
+
+To suspend alerts, set `ALERTS_ENABLED=false` on the operations Worker. To remove telemetry, detach the two producer tail consumers without changing their application behavior. Preserve the separate D1 for approved incident investigation/retention. The web hosting rollback remains the separately reviewed Cloudflare/Vercel procedure.
+
+## What is persisted
+
+Tail code reads only exact script name, mapped runtime outcome, numeric response status and a URL used transiently to classify its pathname. It never reads or serializes headers, cf metadata, logs, exception data, diagnostics, bodies, identities, query parameters or `getUnredacted`. Fixed known paths map to a fixed source-specific class; dynamic slugs, IDs, filenames, encoded variants and unknown routes become `other`. Scheduled service events without a request URL become `scheduled`. Some conservative schema labels (`published`, `redirect`, `public_content`) are reserved but are not emitted for dynamic paths.
+
+Only 5xx or fatal outcomes (`exception`, `exceededCpu`, `exceededMemory`, `scriptNotFound`) become rows. Unknown/canceled/disconnected outcomes without 5xx and ordinary 2xx/3xx/4xx/429 create no row. Processing stops at eight Tail Items per invocation, groups in memory, writes one D1 batch of at most eight upserts, and saturates at 1,000,000. Buckets use receipt time, not producer timestamps. There is one write attempt and no automatic retry: an ambiguous commit must not be intentionally counted twice. Failures are discarded without logs. Tail is best effort and may miss or duplicate events; silence is not evidence that no errors occurred.
+
+The three D1 tables contain only constrained labels, integer times/counts, four monitor state rows, and outbox bookkeeping. There are no generic messages, JSON, URL, header, body, error, identity or provider message-ID columns. SQL CHECK constraints enforce label combinations and integer ranges. Monitor rows cannot be deleted or renamed. The state update uses a revision/last-bucket conditional update inside D1 `batch()`. SQLite triggers insert the notification in that same transaction; a rollback rolls back both. The notification key is `(component, incident_seq, kind)`.
+
+Error aggregates expire logically after 30 days; terminal (`accepted`/`abandoned`) notifications after 90 days. At most 250 expired rows total are removed per scheduled invocation. Four current state rows and unresolved outbox entries remain. Disabled sending can leave pending rows indefinitely, so the operator must review the backlog before activation. Cloudflare Paid D1 Time Travel can make deleted data recoverable for up to 30 additional days. Owner approval of this retention and operator access is pending.
+
+## Probes, thresholds and delivery
+
+Both probes run concurrently every five minutes, with five-second deadlines, manual redirects, no-store requests, body cancellation and a 16 KiB read ceiling. The public probe requires status 200, the stable canonical marker, the exact current production CSP shape including a nonce, and private/no-store cache control. These headers/content are transient and never stored. The service probe calls only `https://qr-service.internal/health` through QR_SERVICE with its bearer; that health route validates required D1/AI/R2/model bindings and executes only `SELECT 1 AS ready`. It returns fixed `{"ready":true}` or fixed 503 `{"ready":false}`, retains bearer authorization and no-store, and calls no AI/customer/R2 data operation.
+
+Probe components open after two consecutive failed scheduled buckets and recover after two consecutive healthy buckets. Missing/out-of-order buckets do not inflate streaks. Runtime components open on at least five signals in one completed bucket or any signals in two consecutive completed buckets. They recover only after three consecutive clear completed buckets while the current corresponding probe is healthy. Initial installation begins at the latest completed bucket; subsequent missed buckets catch up chronologically, at most 12 per producer per run. Delayed historical changes to an already evaluated aggregate do not rewrite history. Long scheduler outages therefore need operator investigation as well as bounded catch-up; this is not a retrospective audit.
+
+No mail is sent from tail. After durable state and retention succeed, Cron atomically leases at most one due outbox row, for 60 seconds, increments the attempt counter, then calls the restricted binding with a fixed subject/body. Subjects/bodies contain only the component, stable incident number, minute-rounded open/recovery time and public operational instructions. No sampled requests, error strings, customer content or provider payloads are included. A recovery waits for its own incident to become terminal. Same-time transitions for one component are ordered by incident sequence then incident-before-recovery.
+
+A returned nonempty `messageId` marks `accepted`; its actual value is discarded. Throws, absent acknowledgement and the five-second send deadline use bounded retry: after attempt one wait 300 seconds; after attempt two wait 900 seconds; after attempt three abandon. A crashed third lease is abandoned after expiry. Attempt/lease fencing prevents a stale acknowledgement overwriting a newer attempt. Email cannot be atomically committed with D1: a response or post-send database write can be lost, causing up to three delivery attempts with the same incident number. There is no exactly-once guarantee, and timeout cannot cancel an already submitted email. A sink failure aborts the run rather than sending outside durable state.
+
+## Operator response
+
+For an incident, verify public availability, check the affected component and incident number in the operations database, and consult the approved hosting/service incident procedure. Read only the operational tables; do not copy raw customer requests into an incident report. For recovery, confirm the corresponding incident number and verify availability before closing the human incident. A recovery email does not certify security or customer-data integrity.
+
+Use approved read-only D1 access for these fixed queries:
+
+```sql
+SELECT component,phase,failure_streak,success_streak,incident_seq,last_signal,opened_at,updated_at,last_bucket FROM monitor_state ORDER BY component;
+SELECT component,incident_seq,kind,state,attempts,transition_at,next_attempt_at,lease_until,terminal_at FROM notifications ORDER BY transition_at DESC LIMIT 50;
+SELECT bucket_start,producer,route_class,status_class,outcome_class,occurrences FROM error_rollups ORDER BY bucket_start DESC LIMIT 50;
+```
+
+For abandoned mail, inspect the fixed outbox state and provider health through approved operator access; verify the actual inbox separately. Do not reset counters blindly or send to an alternate recipient. Investigate recurring failures and perform an owner-approved delivery drill after remediation. An accepted row means API acceptance only, not delivery; provider email analytics may retain sender, recipient, fixed subject, message ID and delivery errors for 31 days.
+
+If monitor `updated_at` stops advancing, check Cron propagation/execution, bindings, operations D1 health and provider status. Missing database/service/secret configuration fails closed and cannot produce a safe deduplicated email. D1 or provider-wide failure can silence this monitor. Use a separately approved external/operator channel during a broad Cloudflare incident; this Worker and its mail provider do not supply independent uptime coverage. This monitoring does not replace human security review, penetration testing, certification or launch approval.
