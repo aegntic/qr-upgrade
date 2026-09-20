@@ -131,12 +131,17 @@ export async function probe(fetcher: (init: RequestInit) => Promise<Response>, w
   while (true) {
    const chunk = await reader.read();
    if (chunk.done) break;
-   size += chunk.value.byteLength;
-   if (size > 16384) return 'probe_shape';
-   body += decoder.decode(chunk.value, { stream: true });
+   const remaining = 16384 - size;
+   if (!web && chunk.value.byteLength > remaining) return 'probe_shape';
+   const prefix = chunk.value.subarray(0, remaining);
+   size += prefix.byteLength;
+   body += decoder.decode(prefix, { stream: true });
    if (web && body.includes(PUBLIC_MARKER)) return 'none';
+   if (web && size === 16384) return 'probe_shape';
   }
   if (web) return 'probe_shape';
+  // Flush any trailing partial UTF-8 sequence before strict whole-body validation.
+  body += decoder.decode();
   // The service owns a fixed response; accept no extra fields/content.
   return body.trim() === '{"ready":true}' ? 'none' : 'probe_shape';
  };
@@ -165,17 +170,21 @@ export function message(row: Notification) {
   text: `Component: ${row.component}\nIncident: ${row.incident_seq}\n${row.kind === 'incident' ? 'Opened' : 'Recovered'}: ${time}\nConsult the QR Upgrade monitoring runbook. Inspect operational state and verify public availability. Escalate through the approved operator process.` };
 }
 export async function sendOne(env: Env, now: number, deadline = 5000): Promise<void> {
- if (env.ALERTS_ENABLED !== 'true' || !env.INCIDENT_EMAIL) return;
  const db = env.OPERATIONS_DB;
- // A crash on attempt three is terminal after the lease expires; no fourth delivery attempt.
+ // Sweep even with sending disabled. Superseded leases never become retryable work.
  await db.prepare(`UPDATE notifications SET state='abandoned',terminal_at=?,lease_until=NULL
-  WHERE state='leased' AND lease_until<=? AND attempts>=3`).bind(now,now).run();
+  WHERE (state='leased' AND lease_until<=? AND (attempts>=3 OR incident_seq<(SELECT incident_seq FROM monitor_state WHERE component=notifications.component)))
+   OR (state='pending' AND kind='recovery' AND NOT EXISTS(SELECT 1 FROM notifications i WHERE i.component=notifications.component AND i.incident_seq=notifications.incident_seq AND i.kind='incident' AND i.state IN ('pending','leased','accepted')))`)
+  .bind(now,now).run();
+ if (env.ALERTS_ENABLED !== 'true' || !env.INCIDENT_EMAIL) return;
  const row = await db.prepare(`UPDATE notifications SET state='leased',attempts=attempts+1,lease_until=?
   WHERE (component,incident_seq,kind)=(SELECT n.component,n.incident_seq,n.kind FROM notifications n
    WHERE ((n.state='pending' AND n.next_attempt_at<=?) OR (n.state='leased' AND n.lease_until<=?)) AND n.attempts<3
-   AND (n.kind='incident' OR NOT EXISTS(SELECT 1 FROM notifications i WHERE i.component=n.component AND i.incident_seq=n.incident_seq AND i.kind='incident' AND i.state IN ('pending','leased')))
+   AND n.incident_seq=(SELECT incident_seq FROM monitor_state WHERE component=n.component)
+   AND NOT EXISTS(SELECT 1 FROM notifications busy WHERE busy.component=n.component AND busy.state='leased' AND busy.lease_until>?)
+   AND (n.kind='incident' OR EXISTS(SELECT 1 FROM notifications i WHERE i.component=n.component AND i.incident_seq=n.incident_seq AND i.kind='incident' AND i.state='accepted'))
    ORDER BY transition_at,component,incident_seq,CASE kind WHEN 'incident' THEN 0 ELSE 1 END LIMIT 1)
-  RETURNING component,incident_seq,kind,attempts,transition_at`).bind(now+60,now,now).first<Notification>();
+  RETURNING component,incident_seq,kind,attempts,transition_at`).bind(now+60,now,now,now).first<Notification>();
  if (!row) return;
  let accepted = false; let timer: ReturnType<typeof setTimeout> | undefined;
  try {
@@ -184,9 +193,12 @@ export async function sendOne(env: Env, now: number, deadline = 5000): Promise<v
  } catch { /* All unknown acknowledgements use the same bounded retry policy; no error inspection. */ }
  finally { clearTimeout(timer); }
  const state = accepted ? 'accepted' : row.attempts >= 3 ? 'abandoned' : 'pending';
- await db.prepare(`UPDATE notifications SET state=?,next_attempt_at=?,lease_until=NULL,terminal_at=?
+ await db.prepare(`UPDATE notifications SET
+  state=CASE WHEN ?='pending' AND incident_seq<(SELECT incident_seq FROM monitor_state WHERE component=notifications.component) THEN 'abandoned' ELSE ? END,
+  next_attempt_at=?,lease_until=NULL,
+  terminal_at=CASE WHEN ?='pending' AND incident_seq=(SELECT incident_seq FROM monitor_state WHERE component=notifications.component) THEN NULL ELSE ? END
   WHERE component=? AND incident_seq=? AND kind=? AND state='leased' AND attempts=? AND lease_until=?`)
-  .bind(state,now+(row.attempts===1?300:900),state==='pending'?null:now,row.component,row.incident_seq,row.kind,row.attempts,now+60).run();
+  .bind(state,state,now+(row.attempts===1?300:900),state,now,row.component,row.incident_seq,row.kind,row.attempts,now+60).run();
 }
 export function createOperations(isolated?: IsolatedConfiguration, fetcher: typeof fetch = fetch) {
  if (isolated && (isolated.isolated !== true || isolated.web === isolated.service || [isolated.web,isolated.service].includes('qr-upgrade-operations') || new URL(isolated.publicUrl).protocol !== 'https:')) throw new Error('Invalid isolated configuration');

@@ -7,7 +7,7 @@ import serviceWorker from '../workers/qr-service/worker.mjs';
 import { contentSecurityPolicy } from '../src/lib/security/headers';
 const migration = readFileSync(new URL('../workers/operations/migrations/0001_operations.sql',import.meta.url),'utf8');
 function fixture() {
- const sqlite = new DatabaseSync(':memory:'); sqlite.exec('PRAGMA foreign_keys=ON'); sqlite.exec(migration);
+ const sqlite = new DatabaseSync(':memory:'); sqlite.exec('PRAGMA foreign_keys=ON'); sqlite.exec(migration); sqlite.exec(readFileSync(new URL('../workers/operations/migrations/0002_bounded_notifications.sql',import.meta.url),'utf8'));
  let batches=0, fail=false, afterStatement=-1;
  const wrap=(sql:string,values:(string|number|null)[]=[])=>({
   sql,values,bind:(...next:(string|number|null)[])=>wrap(sql,next),
@@ -78,7 +78,7 @@ test('runtime opens at five or two consecutive errors and requires three clear c
 test('cleanup deletes at most 250 expired rows total and preserves pending notifications and four monitors',async()=>{
  const f=fixture();for(let n=0;n<240;n++)f.sqlite.prepare("INSERT INTO error_rollups VALUES(?,'web','other','5xx','ok',1)").run(n*300);
  for(let n=1;n<=30;n++)f.sqlite.prepare("INSERT INTO notifications VALUES('web_probe',?,'incident','accepted',1,0,0,NULL,1)").run(n);
- f.sqlite.exec("INSERT INTO notifications VALUES('service_probe',1,'incident','pending',0,0,0,NULL,NULL)");
+ f.sqlite.exec("UPDATE monitor_state SET incident_seq=1 WHERE component='service_probe'; INSERT INTO notifications VALUES('service_probe',1,'incident','pending',0,0,0,NULL,NULL)");
  await retention(f.db,100*86400);assert.equal(f.sqlite.prepare('SELECT COUNT(*) n FROM error_rollups').get()!.n,0);assert.equal(f.notify().length,21);assert.equal(f.state().component,'web_probe');f.sqlite.close();
 });
 test('mail disabled by default; concurrent sends atomically lease one row and use only fixed message content',async()=>{
@@ -153,4 +153,126 @@ test('runtime catch-up is limited to twelve completed buckets and cannot apply f
  await app.scheduled({scheduledTime:600000},f.env);await app.scheduled({scheduledTime:30000000},f.env);
  assert.equal(f.state('web_runtime').last_bucket,3900);assert.equal(f.state('service_runtime').last_bucket,3900);
  const before=f.state('web_runtime').revision;await app.scheduled({scheduledTime:300000},f.env);assert.equal(f.state('web_runtime').revision,before);f.sqlite.close();
+});
+
+test('public probe is chunk-partition invariant within its byte prefix and cancels remainder',async()=>{
+ const encode=(value:string)=>new TextEncoder().encode(value);
+ async function streamed(body:Uint8Array,parts:number[]){
+  let offset=0,index=0,cancelled=0;
+  const stream=new ReadableStream<Uint8Array>({pull(c){const length=parts[index++]??body.length;c.enqueue(body.subarray(offset,offset+length));offset+=length;},cancel(){cancelled++;}});
+  const result=await probe(async()=>new Response(stream,{headers}),true,1000);assert.equal(cancelled,1);return result;
+ }
+ for(const offset of [0,200,16384-PUBLIC_MARKER.length]){
+  const bytes=encode('x'.repeat(offset)+PUBLIC_MARKER+'x'.repeat(20000));
+  for(const parts of [[],[200],[offset+5,3,7,11],[...Array.from({length:16500},()=>1)]])assert.equal(await streamed(bytes,parts),'none');
+ }
+ for(const offset of [16384-PUBLIC_MARKER.length+1,16384,20000]){
+  const bytes=encode('x'.repeat(offset)+PUBLIC_MARKER+'x'.repeat(100));
+  for(const parts of [[],[5000,5000,5000],[16383,1,1000]])assert.equal(await streamed(bytes,parts),'probe_shape');
+ }
+ assert.equal(await streamed(encode('x'.repeat(20000)),[]),'probe_shape');
+ // A valid service prefix followed by extra content remains invalid, regardless of chunks.
+ for(const parts of [[],[14]]){
+  const body=encode('{"ready":true}'+'x'.repeat(20000));let offset=0,index=0;
+  const stream=new ReadableStream<Uint8Array>({pull(c){if(offset>=body.length){c.close();return;}const length=parts[index++]??body.length;c.enqueue(body.subarray(offset,offset+length));offset+=length;}});
+  assert.equal(await probe(async()=>new Response(stream),false),'probe_shape');
+ }
+ assert.equal(await probe(async()=>new Response(new Uint8Array([...encode('{"ready":true}'),0xc2])),false),'probe_shape');
+});
+
+const components=['web_probe','service_probe','web_runtime','service_runtime'] as const;
+function inventory(f:ReturnType<typeof fixture>){
+ const counts=f.sqlite.prepare("SELECT SUM(state='pending') pending,SUM(state='leased') leased,SUM(state IN ('pending','leased')) outstanding,SUM(state='accepted') accepted,SUM(state='abandoned') abandoned FROM notifications").get()!;
+ assert.ok(Number(counts.pending)<=8);assert.ok(Number(counts.outstanding)<=12);
+ for(const row of f.sqlite.prepare("SELECT component,SUM(state='pending') pending,SUM(state='leased') leased,COUNT(*) outstanding FROM notifications WHERE state IN ('pending','leased') GROUP BY component").all()){
+  assert.ok(Number(row.pending)<=2);assert.ok(Number(row.leased)<=1);assert.ok(Number(row.outstanding)<=3);
+ }
+ assert.equal(f.sqlite.prepare("SELECT COUNT(*) n FROM notifications n JOIN monitor_state m USING(component) WHERE n.state='pending' AND n.incident_seq<>m.incident_seq").get()!.n,0);
+ return counts;
+}
+async function signalAt(f:ReturnType<typeof fixture>,component:typeof components[number],bucket:number,now:number,failed:boolean){
+ const old=f.state(component);const next=advance(old,bucket,now,failed?(component.endsWith('_runtime')?'runtime_5xx':'probe_http'):'none',failed?1:0,!failed);
+ await Promise.all([transition(f.db,old,next),transition(f.db,old,next)]); // overlapping same-snapshot CAS
+}
+for(const mode of ['success','disabled','failing'] as const)test(`500 four-component flapping runs keep actual notification inventory bounded: ${mode}`,async()=>{
+ const f=fixture();f.env.ALERTS_ENABLED=mode==='disabled'?'false':'true';let sends=0;
+ f.env.INCIDENT_EMAIL={async send(msg){sends++;const match=/ · (\w+) · (\d+)$/.exec(msg.subject)!;assert.equal(Number(match[2]),f.state(match[1]).incident_seq,'send must reference current logical incident');if(mode==='failing')throw Error('synthetic failure');return {messageId:'synthetic'};}};
+ let peakPending=0,peakOutstanding=0;
+ for(let run=1;run<=500;run++){
+  const failed=(run-1)%5<2,now=run*300;
+  for(const component of components)await signalAt(f,component,now,now,failed);
+  const before=sends;await sendOne(f.env,now);assert.ok(sends-before<=1);
+  // Old invocations cannot alter phase, enqueue work or resurrect suppressed rows.
+  for(const component of components)await signalAt(f,component,now-300,now-300,!failed);
+  const counts=inventory(f);peakPending=Math.max(peakPending,Number(counts.pending));peakOutstanding=Math.max(peakOutstanding,Number(counts.outstanding));
+ }
+ for(const component of components){assert.equal(f.state(component).incident_seq,100);assert.equal(f.state(component).phase,'healthy');}
+ const counts=inventory(f);assert.ok(Number(counts.abandoned)>0);assert.equal(counts.leased,0);assert.equal(f.notify().length,800);
+ assert.equal(f.sqlite.prepare("SELECT COUNT(*) n FROM notifications r WHERE r.kind='recovery' AND r.state='accepted' AND NOT EXISTS(SELECT 1 FROM notifications i WHERE i.component=r.component AND i.incident_seq=r.incident_seq AND i.kind='incident' AND i.state='accepted')").get()!.n,0);
+ console.info(JSON.stringify({mode,runs:500,sends,peakPending,peakOutstanding,...counts}));
+ if(mode==='disabled'){
+  f.env.ALERTS_ENABLED='true';for(let n=0;n<8;n++)await sendOne(f.env,150300+n*300);
+  assert.equal(sends,8);assert.equal(inventory(f).outstanding,0);
+ }
+ f.sqlite.close();
+});
+
+test('new incidents atomically suppress older pending recoveries without suppressing the current monitor phase',async()=>{
+ const f=fixture();await open(f);f.env.ALERTS_ENABLED='true';await sendOne(f.env,700);await tick(f,900,false);await tick(f,1200,false);
+ assert.equal(f.notify().find(row=>row.kind==='recovery')!.state,'pending');await tick(f,1500,true);const old=f.state(),next=advance(old,1800,1801,'probe_http',0,false);
+ await Promise.all([transition(f.db,old,next),transition(f.db,old,next)]);
+ assert.equal(f.state().phase,'open');assert.equal(f.state().incident_seq,2);assert.equal(f.notify().find(row=>row.incident_seq===1&&row.kind==='recovery')!.state,'abandoned');
+ await sendOne(f.env,1802);assert.match((f.messages.at(-1) as {subject:string}).subject,/incident · web_probe · 2$/);inventory(f);f.sqlite.close();
+});
+
+for(const acknowledgement of ['accepted','failed','expired'] as const)test(`leased predecessor is bounded and late ${acknowledgement} cannot resurrect suppressed work`,async()=>{
+ const f=fixture();await open(f);f.env.ALERTS_ENABLED='true';let resolveSend!:(value:{messageId?:string})=>void,started!:()=>void;
+ const startedPromise=new Promise<void>(resolve=>{started=resolve;});
+ f.env.INCIDENT_EMAIL={async send(){started();return new Promise(resolve=>{resolveSend=resolve;});}};
+ const delivery=sendOne(f.env,10000,1000);await startedPromise;
+ for(const [bucket,failed] of [[900,false],[1200,false],[1500,true],[1800,true],[2100,false],[2400,false]] as const)await signalAt(f,'web_probe',bucket,10010,failed);
+ let counts=inventory(f);assert.equal(counts.outstanding,3);assert.equal(counts.pending,2);assert.equal(counts.leased,1);
+ f.env.ALERTS_ENABLED='false';
+ if(acknowledgement==='expired'){await sendOne(f.env,10061);assert.equal(f.notify().find(row=>row.incident_seq===1&&row.kind==='incident')!.state,'abandoned');}
+ resolveSend(acknowledgement==='failed'?{}:{messageId:'synthetic-late'});await delivery;
+ const predecessor=f.notify().find(row=>row.incident_seq===1&&row.kind==='incident')!;
+ assert.equal(predecessor.state,acknowledgement==='accepted'?'accepted':'abandoned');
+ assert.equal(f.notify().find(row=>row.incident_seq===1&&row.kind==='recovery')!.state,'abandoned');counts=inventory(f);assert.equal(counts.pending,2);assert.equal(counts.outstanding,2);
+ let sends=0;f.env.ALERTS_ENABLED='true';f.env.INCIDENT_EMAIL={async send(msg){sends++;assert.match(msg.subject,sends===1?/incident · web_probe · 2$/:/recovery · web_probe · 2$/);return {messageId:'synthetic-current'};}};
+ await sendOne(f.env,10100);await sendOne(f.env,10400);assert.equal(sends,2);assert.equal(inventory(f).outstanding,0);f.sqlite.close();
+});
+
+test('twelve outstanding rows and eight pending rows are the enforceable maximum across four components',async()=>{
+ const f=fixture();
+ for(const component of components){
+  await signalAt(f,component,300,9000,true);await signalAt(f,component,600,9000,true);
+  f.sqlite.prepare("UPDATE notifications SET state='leased',attempts=1,lease_until=10060 WHERE component=? AND kind='incident'").run(component);
+  for(const [bucket,failed] of [[900,false],[1200,false],[1500,false],[1800,true],[2100,true],[2400,false],[2700,false],[3000,false]] as const)await signalAt(f,component,bucket,10010,failed);
+ }
+ const counts=inventory(f);assert.equal(counts.pending,8);assert.equal(counts.leased,4);assert.equal(counts.outstanding,12);
+ assert.throws(()=>f.sqlite.exec("UPDATE notifications SET state='leased' WHERE component='web_probe' AND incident_seq=2 AND kind='incident'"));
+ assert.throws(()=>f.sqlite.exec("UPDATE notifications SET state='pending' WHERE component='web_probe' AND incident_seq=1 AND kind='recovery'"));
+ f.env.ALERTS_ENABLED='false';await sendOne(f.env,10061);assert.equal(inventory(f).outstanding,8);assert.equal(inventory(f).leased,0);f.sqlite.close();
+});
+
+test('recovery is abandoned when its incident never received acceptance, including recovery after terminal failure',async()=>{
+ for(const recoverBeforeFailure of [true,false]){
+  const f=fixture();await open(f);if(recoverBeforeFailure){await tick(f,900,false);await tick(f,1200,false);}
+  f.env.ALERTS_ENABLED='true';let sends=0;f.env.INCIDENT_EMAIL={async send(msg){sends++;assert.match(msg.subject,/incident/);throw Error('synthetic');}};
+  for(const now of [2000,2300,3200])await sendOne(f.env,now);
+  if(!recoverBeforeFailure){await tick(f,3600,false);await tick(f,3900,false);}
+  assert.equal(f.notify().find(row=>row.kind==='recovery')!.state,'abandoned');await sendOne(f.env,5000);assert.equal(sends,3);f.sqlite.close();
+ }
+});
+
+test('bounded-outbox migration upgrades historical pending inventory while retaining terminal suppression history',()=>{
+ const sqlite=new DatabaseSync(':memory:');sqlite.exec(migration);
+ sqlite.exec("UPDATE monitor_state SET incident_seq=100,updated_at=10000");
+ for(const component of components)for(let sequence=1;sequence<=100;sequence++)for(const kind of ['incident','recovery'])sqlite.prepare("INSERT INTO notifications VALUES(?,?,?,'pending',0,9000,9000,NULL,NULL)").run(component,sequence,kind);
+ sqlite.exec("UPDATE notifications SET state='leased',attempts=1,lease_until=10060 WHERE incident_seq IN (97,98,99) AND kind='incident'");
+ sqlite.exec(readFileSync(new URL('../workers/operations/migrations/0002_bounded_notifications.sql',import.meta.url),'utf8'));
+ const counts=sqlite.prepare("SELECT SUM(state='pending') pending,SUM(state='leased') leased,SUM(state='abandoned') abandoned FROM notifications").get()!;
+ assert.deepEqual({...counts},{pending:8,leased:4,abandoned:788});
+ assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM notifications WHERE state='leased' AND incident_seq=99").get()!.n,4);
+ assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM notifications WHERE state='abandoned' AND terminal_at IS NULL").get()!.n,0);sqlite.close();
 });
