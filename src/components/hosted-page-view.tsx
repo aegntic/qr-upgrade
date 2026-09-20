@@ -1,5 +1,5 @@
 'use client';
-import {useState,type CSSProperties} from 'react';
+import React,{useState,type CSSProperties} from 'react';
 import {ArrowUpRight,FileDown,Send} from 'lucide-react';
 import type {ContentDraft} from '@/lib/content-types';
 
@@ -18,6 +18,6 @@ export default function HostedPageView({content,slug,preview=false}:{content:Con
   {content.kind==='gallery'&&<div className="hosted-gallery">{content.items.map((item,index)=><figure key={index}>{item.assetId?<img src={asset(item.assetId)} alt={item.description||item.title} loading="lazy"/>:<div className="hosted-image-placeholder">Your image here</div>}<figcaption><strong>{item.title}</strong>{item.description&&<span>{item.description}</span>}</figcaption></figure>)}</div>}
   {content.kind==='document'&&(content.fileId&&!preview?<a className="hosted-document" href={asset(content.fileId)} download><FileDown size={30}/><span><strong>Download the document</strong><small>PDF · opens as a file download</small></span><ArrowUpRight size={20}/></a>:<div className="hosted-document"><FileDown size={30}/><span><strong>{content.fileId?'Your document is attached':'Attach your document'}</strong><small>PDF download</small></span></div>)}
   {content.kind==='form'&&(sent?<div className="hosted-thanks" role="status"><Send size={24}/><h2>Message delivered.</h2><p>{content.formMessage||'Thank you for taking a moment to share.'}</p></div>:<form className="hosted-form" onSubmit={submit}><label>Name <span>optional</span><input name="name" maxLength={80} autoComplete="name" disabled={busy||preview}/></label><label>Email <span>optional</span><input name="email" type="email" maxLength={254} autoComplete="email" disabled={busy||preview}/></label><label>Your message<textarea name="message" required maxLength={2000} rows={5} disabled={busy||preview}/></label><label className="hosted-honeypot" aria-hidden="true">Website<input name="website" tabIndex={-1} autoComplete="off"/></label><label className="hosted-consent"><input name="consent" type="checkbox" required disabled={busy||preview}/><span>I agree to share this message and any contact details I enter with the owner of this page.</span></label><p className="hosted-privacy">Please do not include passwords, payment details, or sensitive personal information. Your message is stored privately for the page owner.</p>{error&&<p role="alert" className="generator-error">{error}</p>}<button className="primary-button" disabled={busy||preview} type="submit">{preview?'Form preview':busy?'Sending…':'Send message'}<Send size={16}/></button></form>)}
-  <footer>MADE WITH <a href="https://qrupgrade.com">QR upgrade ↗</a></footer>
+  <footer>MADE WITH {preview?<span>QR upgrade ↗</span>:<a href="https://qrupgrade.com">QR upgrade ↗</a>}</footer>
  </article>;
 }
