@@ -1,5 +1,6 @@
+import { serviceFetch, serviceAvailable } from '../../../cloudflare/service';
 import {createHmac} from 'node:crypto';
-import {isIP} from 'node:net';
+import {trustedRequestIp} from '../../../cloudflare/runtime';
 import {accountConfig,accountReply,accountSameOrigin,checkedAccount,type AccountConfig,type EntitlementOptions} from './account';
 import {billingConfig,resolveEntitlement} from './billing';
 import {readContentBody} from '../../../workers/qr-service/content.mjs';
@@ -8,8 +9,8 @@ const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}
 const SLUG=/^[A-Za-z0-9_-]{16}$/;
 const unavailable=()=>accountReply({error:'Content is temporarily unavailable.'},503);
 function service(path:string,c:AccountConfig,init:RequestInit={}){
- if(!c.serviceUrl||!c.secret||c.secret.length<32)throw new Error('Service unavailable');
- return fetch(`${c.serviceUrl.replace(/\/$/,'')}${path}`,{...init,headers:{...Object.fromEntries(new Headers(init.headers)),Authorization:`Bearer ${c.secret}`},signal:AbortSignal.timeout(15000),cache:'no-store'});
+ if(!serviceAvailable(c))throw new Error('Service unavailable');
+ return serviceFetch(c,path,{...init,headers:{...Object.fromEntries(new Headers(init.headers)),Authorization:`Bearer ${c.secret}`},signal:AbortSignal.timeout(15000),cache:'no-store'});
 }
 async function forward(path:string,c:AccountConfig,init:RequestInit={},binary=false){
  try{const result=await service(path,c,init);if(result.status>=500)return unavailable();if(binary&&result.ok){const headers=new Headers({'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Content-Security-Policy':"sandbox; default-src 'none'"});for(const name of ['Content-Type','Content-Disposition','Content-Length'])if(result.headers.has(name))headers.set(name,result.headers.get(name)!);return new Response(result.body,{status:result.status,headers});}return accountReply(await result.json(),result.status);}catch{return unavailable();}
@@ -37,8 +38,8 @@ export async function publicContentAsset(r:Request,slug:string,assetId:string,c:
 }
 export async function publicSubmission(r:Request,slug:string,c:AccountConfig=accountConfig()){
  if(!SLUG.test(slug))return accountReply({error:'Form not found.'},404);if(r.method!=='POST')return accountReply({error:'Method not allowed.'},405);if(!accountSameOrigin(r,c))return accountReply({error:'Open the form to send a message.'},403);
- // Vercel overwrites this header. Never trust browser x-forwarded-for or x-qr-network.
- const trusted=r.headers.get('x-vercel-forwarded-for')?.trim();const ip=c.development?'local-development':trusted&&isIP(trusted)?trusted:null;
+ // The web entry validates provider metadata before any service subrequest.
+ const ip=trustedRequestIp(r,c.development);
  if(!ip||!c.secret||c.secret.length<32)return unavailable();let body:string;try{body=JSON.stringify(await readContentBody(r,8192));}catch{return accountReply({error:'Use valid form details within 8 KB.'},400);}
  const network=createHmac('sha256',c.secret).update(`content-form:${new Date().toISOString().slice(0,10)}:${ip}`).digest('hex');
  return forward(`/public-content/${slug}/submissions`,c,{method:'POST',headers:{'Content-Type':'application/json','x-qr-network':network},body});

@@ -1,3 +1,4 @@
+import { serviceFetch } from '../../../cloudflare/service';
 import {createHash,randomBytes} from 'node:crypto';
 import type {JWTPayload} from 'jose';
 import {accountConfig,configured,accountOrigin,accountSameOrigin,accountReply,accountUnavailable,currentSession,readCookie,cookie,signAccountToken,verifyToken,type AccountConfig,type AccountDeps,type CallbackDeps} from './account';
@@ -11,7 +12,7 @@ async function proof(r:Request,c:AccountConfig,purpose:'deletion-intent'|'deleti
  try{const value=readCookie(r,c,purpose);if(!value||value.length>4096)return null;const p=await verifyToken(value,purpose,c);if(!hash.test(String(p.owner))||!hash.test(String(p.intent))||!Number.isSafeInteger(p.version)||Number(p.version)<1)return null;return {owner:String(p.owner),version:Number(p.version),intent:String(p.intent)};}catch{return null;}
 }
 async function service(c:AccountConfig,d:AccountDeps,p:Proof,path:string,body?:unknown){
- return (d.fetch||fetch)(`${c.serviceUrl!.replace(/\/$/,'')}/account/deletion/${path}`,{method:body===undefined?'GET':'POST',headers:{Authorization:`Bearer ${c.secret}`,'x-qr-user':p.owner,'x-qr-deletion-id':p.intent,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(10000),cache:'no-store'});
+ return serviceFetch(c,`/account/deletion/${path}`,{method:body===undefined?'GET':'POST',headers:{Authorization:`Bearer ${c.secret}`,'x-qr-user':p.owner,'x-qr-deletion-id':p.intent,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(10000),cache:'no-store'},d.fetch);
 }
 function validBrowser(r:Request,c:AccountConfig,post=false){return !new URL(r.url).search&&![...r.headers.keys()].some(name=>name.startsWith('x-qr-'))&&(!post||accountSameOrigin(r,c));}
 async function confirmation(r:Request){try{const b=await readAccountBody(r);return Object.keys(b).length===1&&b.confirm===true;}catch{return false;}}

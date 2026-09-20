@@ -24,3 +24,5 @@ verification.md
 **/*.pem
 **/*.key
 **/*.mobileprovision
+
+.open-next/

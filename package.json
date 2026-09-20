@@ -10,7 +10,13 @@
     "test": "tsx --test tests/*.test.ts",
     "security:evidence": "node scripts/security/collect.mjs",
     "compliance:release": "node scripts/security/release.mjs",
-    "security:http": "node scripts/security/http-check.mjs"
+    "security:http": "node scripts/security/http-check.mjs",
+    "cf:build": "opennextjs-cloudflare build",
+    "cf:preview": "opennextjs-cloudflare preview",
+    "cf:upload": "opennextjs-cloudflare upload",
+    "cf:dry-run": "wrangler deploy --dry-run",
+    "cf:typegen": "wrangler types --env-interface CloudflareEnv --include-runtime=false cloudflare-env.d.ts",
+    "security:cloudflare": "node scripts/security/cloudflare-check.mjs"
   },
   "dependencies": {
     "jose": "6.2.12",
@@ -24,17 +30,26 @@
     "stripe": "22.6.2"
   },
   "devDependencies": {
+    "@opennextjs/cloudflare": "1.20.6",
     "@tailwindcss/postcss": "4.3.3",
     "@types/node": "^24",
     "@types/qrcode": "^1.5.6",
     "@types/react": "19.3.0",
     "@types/react-dom": "^19",
     "fake-indexeddb": "^6.2.5",
+    "rclone.js": "0.6.6",
     "tailwindcss": "4.3.3",
     "tsx": "4.23.13",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "wrangler": "4.135.0"
   },
   "overrides": {
-    "postcss": "8.5.28"
+    "postcss": "8.5.28",
+    "rclone.js": {
+      "adm-zip": "0.6.1"
+    }
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

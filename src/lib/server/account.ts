@@ -1,3 +1,5 @@
+import { serviceFetch, serviceAvailable } from '../../../cloudflare/service';
+import { runtimeVariable } from '../../../cloudflare/runtime';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createRemoteJWKSet, jwtVerify, SignJWT } from 'jose';
 import type {BillingConfig,BillingDeps} from './billing';
@@ -10,8 +12,8 @@ export const MAX_CLOUD_BYTES = 3 * 1024 * 1024;
 export type Account = { id: string; name: string; email: string; version: number };
 export type AccountConfig = { clientId?: string; clientSecret?: string; secret?: string; serviceUrl?: string; development: boolean };
 export type EntitlementOptions={config?:BillingConfig;deps?:BillingDeps;accountDeps?:AccountDeps};
-export function accountConfig(): AccountConfig { return {clientId:process.env.GOOGLE_CLIENT_ID,clientSecret:process.env.GOOGLE_CLIENT_SECRET,secret:process.env.QR_SERVICE_SECRET,serviceUrl:process.env.QR_SERVICE_URL,development:process.env.NODE_ENV==='development'}; }
-export function configured(c=accountConfig()) { return !!(c.clientId&&c.clientSecret&&c.secret&&c.secret.length>=32&&c.serviceUrl); }
+export function accountConfig(): AccountConfig { return {clientId:runtimeVariable('GOOGLE_CLIENT_ID'),clientSecret:runtimeVariable('GOOGLE_CLIENT_SECRET'),secret:runtimeVariable('QR_SERVICE_SECRET'),serviceUrl:runtimeVariable('QR_SERVICE_URL'),development:process.env.NODE_ENV==='development'}; }
+export function configured(c=accountConfig()) { return !!(c.clientId&&c.clientSecret&&serviceAvailable(c)); }
 export function accountOrigin(c=accountConfig()) { return c.development?'http://localhost:3040':'https://qrupgrade.com'; }
 export function accountSameOrigin(r:Request,c=accountConfig()) { return r.headers.get('origin')===accountOrigin(c)&&r.headers.get('sec-fetch-site')!=='cross-site'; }
 export function accountReply(body:unknown,status=200) { return Response.json(body,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}}); }
@@ -28,7 +30,7 @@ export class AccountClosed extends Error {}
 export const accountUnavailable=()=>accountReply({error:'Account security is temporarily unavailable. Please try again. Your saved designs remain stored.'},503);
 async function securityService(path:string,owner:string,c:AccountConfig,deps:AccountDeps={},body?:unknown,version?:number){
  try{
- const result=await(deps.fetch||fetch)(`${c.serviceUrl!.replace(/\/$/,'')}/account/${path}`,{method:body===undefined?'GET':'POST',headers:{Authorization:`Bearer ${c.secret}`,'x-qr-user':owner,'Content-Type':'application/json',...(version===undefined?{}:{'x-qr-session-version':String(version)})},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(5000),cache:'no-store'});
+ const result=await serviceFetch(c,`/account/${path}`,{method:body===undefined?'GET':'POST',headers:{Authorization:`Bearer ${c.secret}`,'x-qr-user':owner,'Content-Type':'application/json',...(version===undefined?{}:{'x-qr-session-version':String(version)})},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(5000),cache:'no-store'},deps.fetch);
  // Never interpret service-bearer rejection (401) as a browser account transition.
  if(result.status===409&&['session','history','revoke'].includes(path)){
  const denial=await result.json();
@@ -124,5 +126,5 @@ export async function cloudProxy(r:Request,id?:string,c=accountConfig(),entitlem
  if(!['GET','POST','PUT','PATCH'].includes(r.method)||(!id&&['PUT','PATCH'].includes(r.method))||(id&&r.method==='POST'))return accountReply({error:'Method not allowed.'},405);
  let body:string|undefined;if(r.method!=='GET'){if(!accountSameOrigin(r,c))return accountReply({error:'Open the studio to update your designs.'},403);try{body=await boundedCloudBody(r);}catch{return accountReply({error:'Use a valid JSON design smaller than 3 MB.'},400);}}
  try {let plan:string|undefined;if(!id&&r.method==='POST'){const billing=await import('./billing');const config=entitlementOptions?.config||{...billing.billingConfig(),account:c};plan=(await billing.resolveEntitlement(user.id,config,entitlementOptions?.deps)).tier;}
- const response=await fetch(`${c.serviceUrl!.replace(/\/$/,'')}/cloud/designs${id?`/${id}`:''}`,{method:r.method,headers:{Authorization:`Bearer ${c.secret}`,'x-qr-user':user.id,'x-qr-session-version':String(user.version),'Content-Type':'application/json',...(plan?{'x-qr-plan':plan}:{})},body,signal:AbortSignal.timeout(15000),cache:'no-store'});if(response.status>=500)return accountReply({error:'Cloud storage is temporarily unavailable. Your local designs remain available.'},503);return accountReply(await response.json(),response.status);}catch{return accountReply({error:'Cloud storage is temporarily unavailable. Your local designs remain available.'},503);}
+ const response=await serviceFetch(c,`/cloud/designs${id?`/${id}`:''}`,{method:r.method,headers:{Authorization:`Bearer ${c.secret}`,'x-qr-user':user.id,'x-qr-session-version':String(user.version),'Content-Type':'application/json',...(plan?{'x-qr-plan':plan}:{})},body,signal:AbortSignal.timeout(15000),cache:'no-store'});if(response.status>=500)return accountReply({error:'Cloud storage is temporarily unavailable. Your local designs remain available.'},503);return accountReply(await response.json(),response.status);}catch{return accountReply({error:'Cloud storage is temporarily unavailable. Your local designs remain available.'},503);}
 }

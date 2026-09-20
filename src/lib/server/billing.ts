@@ -1,10 +1,12 @@
+import { runtimeVariable } from '../../../cloudflare/runtime';
+import { serviceFetch } from '../../../cloudflare/service';
 import Stripe from 'stripe';
 import {randomBytes} from 'node:crypto';
 import {accountConfig,configured,accountOrigin,accountSameOrigin,accountReply,checkedAccount,type AccountConfig} from './account';
 import {PLAN_LIMITS} from '../../../shared/plan-limits.mjs';
 import type {BillingPlan,BillingStatus,BillingTier,Entitlement} from '../billing-types';
 export type BillingConfig={account:AccountConfig;enabled:boolean;key?:string;webhookSecret?:string;pro?:string;brand?:string;portalConfiguration?:string};
-export function billingConfig():BillingConfig{return {account:accountConfig(),enabled:process.env.BILLING_ENABLED==='true',key:process.env.STRIPE_SECRET_KEY,webhookSecret:process.env.STRIPE_WEBHOOK_SECRET,pro:process.env.STRIPE_PRICE_PRO,brand:process.env.STRIPE_PRICE_BRAND,portalConfiguration:process.env.STRIPE_PORTAL_CONFIGURATION};}
+export function billingConfig():BillingConfig{return {account:accountConfig(),enabled:runtimeVariable('BILLING_ENABLED')==='true',key:runtimeVariable('STRIPE_SECRET_KEY'),webhookSecret:runtimeVariable('STRIPE_WEBHOOK_SECRET'),pro:runtimeVariable('STRIPE_PRICE_PRO'),brand:runtimeVariable('STRIPE_PRICE_BRAND'),portalConfiguration:runtimeVariable('STRIPE_PORTAL_CONFIGURATION')};}
 export function billingReady(c:BillingConfig){return c.enabled&&configured(c.account)&&/^(sk|rk)_(test|live)_[A-Za-z0-9]+$/.test(c.key||'')&&!!c.webhookSecret&&/^price_[A-Za-z0-9]+$/.test(c.pro||'')&&/^price_[A-Za-z0-9]+$/.test(c.brand||'')&&c.pro!==c.brand&&/^bpc_[A-Za-z0-9]+$/.test(c.portalConfiguration||'');}
 export type BillingDeps={stripe?:Stripe;fetch?:typeof fetch};
 type Binding={owner:string;customer_id:string;mode:'test'|'live';reservation:string|null;tier:BillingTier|null;reserved_at:number|null;session_id:string|null;lease_until:number};
@@ -13,14 +15,14 @@ const eventTypes=new Set(['customer.subscription.created','customer.subscription
 const unavailable=()=>accountReply({error:'Billing is temporarily unavailable. Please try again.'},503);
 const mode=(c:BillingConfig)=>/^(sk|rk)_live_/.test(c.key!)?'live':'test';
 const id=(v:string|{id:string}|null)=>typeof v==='string'?v:v?.id||null;
-function client(c:BillingConfig,d:BillingDeps){return d.stripe||new Stripe(c.key!,{timeout:10000,maxNetworkRetries:1});}
+function client(c:BillingConfig,d:BillingDeps){return d.stripe||new Stripe(c.key!,{httpClient:Stripe.createFetchHttpClient(),timeout:10000,maxNetworkRetries:1});}
 export async function readBillingBody(r:Request,limit=1024){
  const reader=r.body?.getReader();if(!reader)throw new Error('Missing body');const chunks:Uint8Array[]=[];let length=0,timer:ReturnType<typeof setTimeout>|undefined;
  const timeout=new Promise<never>((_,reject)=>{timer=setTimeout(()=>{reject(new Error('Timeout'));void reader.cancel();},5000);});
  try{while(true){const item=await Promise.race([reader.read(),timeout]);if(item.done)break;length+=item.value.length;if(length>limit){void reader.cancel();throw new Error('Too large');}chunks.push(item.value);}return Buffer.concat(chunks);}finally{clearTimeout(timer);reader.releaseLock();}
 }
 async function service(c:BillingConfig,d:BillingDeps,path:string,owner?:string,body?:unknown,method?:string):Promise<{binding:Binding|null;customerPending?:boolean;customerCreation?:{mode:string;token:string;created_at:number}|null}>{
- const r=await (d.fetch||fetch)(`${c.account.serviceUrl!.replace(/\/$/,'')}${path}`,{method:method||(body?'POST':'GET'),headers:{Authorization:`Bearer ${c.account.secret}`,'Content-Type':'application/json',...(owner?{'x-qr-user':owner}:{}),...(body&&typeof body==='object'&&'version' in body?{'x-qr-session-version':String(body.version)}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(10000),cache:'no-store'});
+ const r=await serviceFetch(c.account,path,{method:method||(body?'POST':'GET'),headers:{Authorization:`Bearer ${c.account.secret}`,'Content-Type':'application/json',...(owner?{'x-qr-user':owner}:{}),...(body&&typeof body==='object'&&'version' in body?{'x-qr-session-version':String(body.version)}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(10000),cache:'no-store'},d.fetch);
  if(!r.ok)throw new Error('Service unavailable');return r.json();
 }
 async function plans(s:Stripe,c:BillingConfig):Promise<BillingPlan[]>{
@@ -157,7 +159,7 @@ export async function billingAction(r:Request,action:'checkout'|'portal',c=billi
 }
 export async function billingWebhook(r:Request,c=billingConfig(),d:BillingDeps={}){
  if(!billingReady(c))return unavailable();let event:Stripe.Event;
- try{const raw=await readBillingBody(r,256*1024);event=client(c,d).webhooks.constructEvent(raw,r.headers.get('stripe-signature')||'',c.webhookSecret!,300);
+ try{const raw=await readBillingBody(r,256*1024);event=await client(c,d).webhooks.constructEventAsync(raw,r.headers.get('stripe-signature')||'',c.webhookSecret!,300);
  if(event.livemode!==(mode(c)==='live'))throw new Error();
  }catch{return accountReply({error:'Invalid webhook.'},400);}
  if(!eventTypes.has(event.type))return accountReply({received:true});

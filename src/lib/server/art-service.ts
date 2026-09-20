@@ -1,12 +1,13 @@
+import { serviceFetch, serviceAvailable } from '../../../cloudflare/service';
+import { trustedRequestIp } from '../../../cloudflare/runtime';
 import { createHmac, randomBytes } from 'node:crypto';
 const COOKIE = 'qr-art-session';
 const requestIdPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const headers = { 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff' };
-export type ArtConfig = { url?: string; secret?: string; production: boolean; previewHost?: string; fetcher?: typeof fetch };
+export type ArtConfig = { url?: string; secret?: string; production: boolean; fetcher?: typeof fetch };
 export function sameOrigin(request: Request, config: ArtConfig) {
  const origin=request.headers.get('origin');
- const allowed=new Set(['https://qrupgrade.com','https://www.qrupgrade.com','https://qr-upgrade.vercel.app']);
- if(config.previewHost)allowed.add(`https://${config.previewHost}`);
+ const allowed=new Set(['https://qrupgrade.com']);
  if(!config.production&&origin&&/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin))allowed.add(origin);
  return !!origin&&allowed.has(origin)&&request.headers.get('sec-fetch-site')!=='cross-site';
 }
@@ -20,7 +21,7 @@ export async function boundedJson(request: Request) {
 export function createArtHandler(config: ArtConfig) {
  return async (request:Request):Promise<Response>=>{
   const respond=(body:unknown,status=200,extra:Record<string,string>={})=>Response.json(body,{status,headers:{...headers,...extra}});
-  const enabled=!!config.url&&!!config.secret&&config.secret.length>=32;
+  const enabled=serviceAvailable({serviceUrl:config.url,secret:config.secret});
   const url=new URL(request.url);
   if(request.method==='GET'&&!url.searchParams.has('id')){
    const cookie=request.headers.get('cookie')?.match(/(?:^|;\s*)qr-art-session=([a-f0-9]{64})(?:;|$)/)?.[1];
@@ -35,12 +36,12 @@ export function createArtHandler(config: ArtConfig) {
   const session=cookie;
   const owner=createHmac('sha256',config.secret!).update(`owner:${session}`).digest('hex');
   const upstreamHeaders:Record<string,string>={authorization:`Bearer ${config.secret}`,'Content-Type':'application/json','x-qr-owner':owner};
-  let target=`${config.url!.replace(/\/$/,'')}/art`, body:string|undefined;
+  let target='/art', body:string|undefined;
   if(request.method==='POST'){
    if(!sameOrigin(request,config))return respond({error:'Open the QR Upgrade studio to generate artwork.'},403);
    try{const input=await boundedJson(request);if(Object.keys(input).some(k=>!['requestId','prompt','style'].includes(k))||!requestIdPattern.test(String(input.requestId||''))||typeof input.prompt!=='string'||input.prompt.length>800||input.prompt.trim().length<8||!['steel','glass','botanical','illustrated'].includes(String(input.style)))throw new Error('Provide a description of 8–800 characters and choose a style.');
-    // Vercel replaces this trusted header; do not use client-supplied x-forwarded-for.
-    const network=config.production ? request.headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim() : 'local-development';
+    // Only the trusted web entry supplies production network metadata.
+    const network=trustedRequestIp(request,!config.production);
     if(!network)return respond({error:'Artwork service could not verify this request. Try again.'},503);
     const networkHash=createHmac('sha256',config.secret!).update(`network:${new Date().toISOString().slice(0,10)}:${network}`).digest('hex');
     body=JSON.stringify({id:input.requestId,owner,network:networkHash,prompt:input.prompt,style:input.style});
@@ -50,7 +51,7 @@ export function createArtHandler(config: ArtConfig) {
    const id=url.searchParams.get('id');if(!requestIdPattern.test(id||''))return respond({error:'Invalid artwork ID.'},400);target+=`?id=${id}`;
   }else return respond({error:'Method not allowed.'},405);
   try{
-   const response=await (config.fetcher||fetch)(target,{method:request.method,headers:upstreamHeaders,body,cache:'no-store',signal:AbortSignal.timeout(12000)});
+   const response=await serviceFetch({serviceUrl:config.url,secret:config.secret},target,{method:request.method,headers:upstreamHeaders,body,cache:'no-store',signal:AbortSignal.timeout(12000)},config.fetcher);
    const data=await response.json();
    return respond(data,response.status);
   }catch{return respond({error:'The artwork service is taking longer than expected. Try again shortly.'},503);}

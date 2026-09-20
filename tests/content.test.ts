@@ -1,3 +1,4 @@
+import { withWebEntry } from '../cloudflare/runtime';
 import {migrate} from './fixtures/migrations';
 import {validAccountDeps} from './fixtures/account-deps';
 import test from 'node:test';
@@ -89,7 +90,7 @@ test('bounded bodies, private auth/origin, fixed proxy identity, trusted network
  const original=globalThis.fetch;try{globalThis.fetch=async(_url,init)=>{const h=new Headers(init?.headers);assert.equal(h.get('Authorization'),`Bearer ${config.secret}`);assert.equal(h.get('x-qr-user'),owner);assert.equal(h.get('x-qr-network'),null);assert.ok(init?.signal);return Response.json({pages:[]});};assert.equal((await contentProxy(make(),undefined,config,false,{accountDeps:validAccountDeps(owner)})).status,200);
  let captured='';globalThis.fetch=async(_url,init)=>{const h=new Headers(init?.headers);captured=h.get('x-qr-network')!;assert.match(captured,/^[a-f0-9]{64}$/);assert.notEqual(captured,other);assert.equal(h.get('x-qr-user'),null);return Response.json({received:true}, {status:201});};assert.equal((await publicSubmission(make(), 'a'.repeat(16),config)).status,201);
  const production={...config,development:false};const publicReq=new Request('https://qrupgrade.com/api/content/public/'+ 'a'.repeat(16)+'/submissions',{method:'POST',headers:{origin:'https://qrupgrade.com','Content-Type':'application/json','x-forwarded-for':'8.8.8.8'},body:JSON.stringify(message)});assert.equal((await publicSubmission(publicReq,'a'.repeat(16),production)).status,503);
- const trusted=new Request(publicReq,{headers:{origin:'https://qrupgrade.com','Content-Type':'application/json','x-vercel-forwarded-for':'8.8.8.8'}});assert.equal((await publicSubmission(trusted,'a'.repeat(16),production)).status,201);
+ const trusted=new Request(publicReq,{headers:{origin:'https://qrupgrade.com','Content-Type':'application/json','x-vercel-forwarded-for':'8.8.8.8'}});assert.equal((await withWebEntry({},'8.8.8.8',()=>publicSubmission(trusted,'a'.repeat(16),production))).status,201);
  globalThis.fetch=async()=>new Response('',{status:404});assert.equal(await getPublicContent('a'.repeat(16),config),null);globalThis.fetch=async()=>{throw new Error('private details');};await assert.rejects(()=>getPublicContent('a'.repeat(16),config));const failed=await contentProxy(make(),undefined,config,false,{accountDeps:validAccountDeps(owner)});assert.equal(failed.status,503);assert.doesNotMatch(await failed.text(),/private details/);assert.equal((await publicContentAsset(req(),'a'.repeat(16),crypto.randomUUID(),config)).status,503);
  }finally{globalThis.fetch=original;}
 });

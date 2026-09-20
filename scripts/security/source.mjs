@@ -9,6 +9,7 @@ export const root = path.resolve(
 const excluded = new Set([
   "node_modules",
   ".next",
+  ".open-next",
   ".git",
   ".workflows",
   ".superpowers",
@@ -35,7 +36,8 @@ export async function sourceDigest(base = root) {
           rel,
         ) ||
         /\.(tsbuildinfo|log)$/.test(rel) ||
-        entry.name.startsWith(".env")
+        entry.name.startsWith(".env") ||
+        entry.name.startsWith(".dev.vars")
       )
         continue;
       if (entry.isSymbolicLink())

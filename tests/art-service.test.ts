@@ -1,3 +1,4 @@
+import { withWebEntry } from '../cloudflare/runtime';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createArtHandler, sameOrigin } from '../src/lib/server/art-service';
@@ -21,24 +22,24 @@ test('art proxy gives worker hashed ownership/network, no raw IP or public crede
  const cookie=bootstrap.headers.get('set-cookie')!;
  assert.match(cookie,/HttpOnly; SameSite=Strict/);assert.match(cookie,/; Secure$/);
  assert.equal((await handler(new Request('https://qrupgrade.com/api/art',{method:'POST',headers:{origin:'https://qrupgrade.com','content-type':'application/json','x-vercel-forwarded-for':'192.0.2.1'},body:JSON.stringify({requestId:id,prompt:'Sculptural glass with steel details',style:'steel'})}))).status,409);
- const result=await handler(req({requestId:id,prompt:'Sculptural glass with steel details',style:'steel'}));
+ const result=await withWebEntry({},'192.0.2.1',()=>handler(req({requestId:id,prompt:'Sculptural glass with steel details',style:'steel'})));
  assert.equal(result.status,202);assert.equal(target,'https://worker.example/art');
  const input=JSON.parse(sent!.body as string);assert.match(input.owner,/^[a-f0-9]{64}$/);assert.match(input.network,/^[a-f0-9]{64}$/);assert.doesNotMatch(sent!.body as string,/192\.0\.2\.1/);
  assert.equal(result.headers.get('set-cookie'),null);
  assert.doesNotMatch(await result.text(),new RegExp(secret));
- const get=await handler(new Request('https://qrupgrade.com/api/art?id='+id,{headers:{cookie:`qr-art-session=${session}`}}));assert.equal(get.status,202);assert.match(String((sent!.headers as Record<string,string>)['x-qr-owner']),/^[a-f0-9]{64}$/);
+ const get=await handler(new Request('https://qrupgrade.com/api/art?id='+id,{headers:{cookie:`qr-art-session=${session}`}}));assert.equal(get.status,202);assert.match(String(new Headers(sent!.headers).get('x-qr-owner')),/^[a-f0-9]{64}$/);
  assert.equal((await handler(new Request('https://qrupgrade.com/api/art?id='+id))).status,404);
 });
 test('bootstrap cookie lets a lost POST response recover the same job without another charge',async()=>{
  let postOwner='',getOwner='',posts=0;
  const handler=createArtHandler({...cfg,fetcher:async(_url,init)=>{
-  const headers=init!.headers as Record<string,string>;
+  const headers=Object.fromEntries(new Headers(init!.headers));
   if(init!.method==='POST'){posts++;postOwner=headers['x-qr-owner'];throw new Error('response lost');}
   getOwner=headers['x-qr-owner'];return Response.json({id,status:'pending'},{status:202});
  }});
  const bootstrap=await handler(new Request('https://qrupgrade.com/api/art'));
  const cookie=bootstrap.headers.get('set-cookie')!.split(';')[0];
- const post=await handler(req({requestId:id,prompt:'Sculptural glass with steel details',style:'steel'},{cookie}));
+ const post=await withWebEntry({},'192.0.2.1',()=>handler(req({requestId:id,prompt:'Sculptural glass with steel details',style:'steel'},{cookie})));
  assert.equal(post.status,503);
  const recovery=await handler(new Request(`https://qrupgrade.com/api/art?id=${id}`,{headers:{cookie}}));
  assert.equal(recovery.status,202);assert.equal(posts,1);assert.equal(getOwner,postOwner);
@@ -67,7 +68,7 @@ test('scheduled cleanup removes expired images but retains same-day quota rows',
   {id:'old-metadata',created_at:now-4*86400000,state:'expired',image:null},
  ];
  const DB={
-  prepare:(sql:string)=>({bind:(...args:unknown[])=>({sql,args})}),
+  prepare:(sql:string)=>({all:async()=>({results:[]}),bind:(...args:unknown[])=>({sql,args,run:async()=>({success:true})})}),
   batch:async(statements:{sql:string,args:unknown[]}[])=>{
    const expiry=Number(statements[0].args[0]);
    for(const row of rows)if(row.created_at<expiry&&row.state!=='expired'){row.image=null;row.state='expired';}

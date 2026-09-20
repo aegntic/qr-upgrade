@@ -11,6 +11,11 @@
   ],
   "automated": [
     {
+      "id": "T14",
+      "title": "Cloudflare runtime and clean artifact boundaries",
+      "method": "Isolated Next/OpenNext build, dry-run size checks, output secret scan and local workerd nonce, headers, binding and signed-webhook checks"
+    },
+    {
       "id": "T01",
       "title": "Secret scan",
       "method": "Gitleaks directory scan"

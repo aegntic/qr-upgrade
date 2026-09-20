@@ -1,3 +1,4 @@
+import { serviceFetch } from '../../../cloudflare/service';
 import {accountConfig,accountSameOrigin,accountReply,accountUnavailable,currentSession,type AccountConfig,type AccountDeps} from './account';
 import {readAccountBody} from '../../../workers/qr-service/account.mjs';
 import {EXPORT_PAGE_BYTES,EXPORT_FILE_LIMITS,EXPORT_UUID,exportFileHeaders,readExportBytes,validateExportInput} from '../../../workers/qr-service/account-export.mjs';
@@ -17,10 +18,10 @@ export async function accountExport(request:Request,file?:FileRequest,config:Acc
  try{
   const session=await currentSession(request,config,deps);if(!session)return signedOut();
   const path=file?`/account/export/files/${file.kind}/${file.id}`:'/account/export';
-  const upstream=await(deps.fetch||fetch)(`${config.serviceUrl!.replace(/\/$/,'')}${path}`,{
+  const upstream=await serviceFetch(config,path,{
    method:request.method,headers:{Authorization:`Bearer ${config.secret}`,'x-qr-user':session.id,'x-qr-session-version':String(session.version),'Content-Type':'application/json'},
    body:file?undefined:JSON.stringify(input),cache:'no-store',signal:AbortSignal.timeout(15000)
-  });
+  },deps.fetch);
   // A service bearer rejection or malformed denial must never masquerade as browser sign-out.
   if(upstream.status===401||upstream.status>=500)return accountUnavailable();
   if(!upstream.ok){
