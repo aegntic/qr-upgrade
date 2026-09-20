@@ -4,11 +4,43 @@ import {useEffect,useState} from 'react';
 import {ArrowUpRight,CreditCard,ShieldCheck} from 'lucide-react';
 import type {BillingStatus} from '@/lib/billing-types';
 import {formatBillingAmount} from '@/lib/billing-format';
+import {useWorkflow} from './workflow-provider';
+import {useServiceOperations} from './use-service-operations';
+
+type BillingOperation={signal:AbortSignal;alive:()=>boolean;current:()=>boolean};
+type BillingFetch=typeof fetch;
+
+export async function loadBillingStatus(operation:BillingOperation,setStatus:(status:BillingStatus)=>void,setError:(message:string)=>void,request:BillingFetch=fetch){
+ try{
+  const response=await request('/api/billing',{cache:'no-store',signal:operation.signal});
+  if(!operation.current())return;
+  const data=await response.json();
+  if(!operation.current())return;
+  if(!response.ok)throw new Error(data.error||'Billing could not be loaded.');
+  setStatus(data);
+ }catch(e){if(operation.current())setError(e instanceof Error?e.message:'Please refresh to try again.');}
+}
+
+export async function openBillingPage(operation:BillingOperation,path:'checkout'|'portal',tier:string|undefined,setError:(message:string)=>void,setBusy:(busy:boolean)=>void,request:BillingFetch=fetch,navigate:(url:string)=>void=url=>window.location.assign(url),timeoutSignal:AbortSignal=AbortSignal.timeout(30000)){
+ try{
+  const response=await request(`/api/billing/${path}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(tier?{tier}:{}),signal:AbortSignal.any([operation.signal,timeoutSignal])});
+  if(!operation.current())return;
+  const data=await response.json();
+  if(!operation.current())return;
+  if(!response.ok)throw new Error(data.error||'Billing could not be opened.');
+  const url=new URL(data.url);
+  if(url.protocol!=='https:'||!['checkout.stripe.com','billing.stripe.com'].includes(url.hostname))throw new Error('The payment page could not be verified.');
+  if(operation.current())navigate(url.href);
+ }catch(e){if(operation.current())setError(timeoutSignal.aborted?'Billing took too long to respond. Refresh your account before trying again.':e instanceof Error?e.message:'Billing could not be opened.');}
+ finally{if(operation.alive())setBusy(false);}
+}
+
 export default function BillingPanel(){
+ const workflow=useWorkflow(),operations=useServiceOperations(workflow.epochs),loadOperations=useServiceOperations(workflow.epochs);
  const [status,setStatus]=useState<BillingStatus|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[returned,setReturned]=useState(false);
- useEffect(()=>{const controller=new AbortController();setReturned(new URLSearchParams(window.location.search).get('checkout')==='returned');fetch('/api/billing',{cache:'no-store',signal:controller.signal}).then(async response=>{const data=await response.json();if(!response.ok)throw new Error(data.error||'Billing could not be loaded.');setStatus(data);}).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:'Please refresh to try again.');});return()=>controller.abort();},[]);
+ useEffect(()=>{const operation=loadOperations.begin(workflow.epochs,'account');setReturned(new URLSearchParams(window.location.search).get('checkout')==='returned');void loadBillingStatus(operation,setStatus,setError);},[]);
  async function open(path:'checkout'|'portal',tier?:'pro'|'brand'){
-  if(busy)return;setBusy(true);setError('');try{const response=await fetch(`/api/billing/${path}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(tier?{tier}:{}),signal:AbortSignal.timeout(30000)});const data=await response.json();if(!response.ok)throw new Error(data.error||'Billing could not be opened.');const url=new URL(data.url);if(url.protocol!=='https:'||!['checkout.stripe.com','billing.stripe.com'].includes(url.hostname))throw new Error('The payment page could not be verified.');window.location.assign(url.href);}catch(e){setError(e instanceof Error&&e.name!=='TimeoutError'?e.message:'Billing took too long to respond. Refresh your account before trying again.');setBusy(false);}
+  if(busy)return;const operation=operations.begin(workflow.epochs,'account');setBusy(true);setError('');await openBillingPage(operation,path,tier,setError,setBusy);
  }
  return <section><nav className="service-nav" aria-label="Workspace"><Link href="/designs">My designs</Link><Link href="/links">Dynamic links</Link><Link href="/content">Hosted content</Link><Link href="/account">Your account</Link><Link href="/billing" aria-current="page">Billing</Link></nav>{error&&<p role="alert" className="generator-error">{error}</p>}{!status&&!error&&<p role="status">Opening billing…</p>}
  {returned&&status&&<p className="service-notice" role="status">{status.subscription?'Your current subscription is shown below.':'Your account has been refreshed. A checkout return alone does not confirm payment; no active subscription is showing yet.'}</p>}
