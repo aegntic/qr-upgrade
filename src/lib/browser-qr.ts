@@ -68,7 +68,9 @@ export async function exportQR(
   svg: string,
   format: "svg" | "png" | "pdf",
   sizeMm: number,
+  filename = "qr-upgrade",
 ) {
+  const basename = filename.replace(/[^\p{L}\p{N} _.-]/gu, "").replace(/^\.+/, "").trim().slice(0, 80) || "qr-upgrade";
   if (format === "svg") {
     const printSvg = svg.replace(
       'width="768" height="768"',
@@ -76,7 +78,7 @@ export async function exportQR(
     );
     downloadBlob(
       new Blob([printSvg], { type: "image/svg+xml" }),
-      "qr-upgrade.svg",
+      `${basename}.svg`,
     );
     return;
   }
@@ -89,7 +91,7 @@ export async function exportQR(
         "image/png",
       ),
     );
-    downloadBlob(blob, "qr-upgrade.png");
+    downloadBlob(blob, `${basename}.png`);
     return;
   }
   const { jsPDF } = await import("jspdf");
@@ -103,7 +105,7 @@ export async function exportQR(
     sizeMm,
     sizeMm,
   );
-  doc.save("qr-upgrade.pdf");
+  doc.save(`${basename}.pdf`);
 }
 export async function readLocalImage(file: File): Promise<string> {
   if (!["image/png", "image/jpeg", "image/webp"].includes(file.type))

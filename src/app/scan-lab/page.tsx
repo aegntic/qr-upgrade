@@ -1,4 +1,4 @@
-import ArtStudio from "@/components/art-studio";
+import ConnectedScanLab from "@/components/connected-scan-lab";
 export const metadata = {
   title: "Scan Lab",
   description:
@@ -16,7 +16,7 @@ export default function ScanLab() {
           under selected print conditions.
         </p>
       </div>
-      <ArtStudio />
+      <ConnectedScanLab />
     </main>
   );
 }

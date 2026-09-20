@@ -1,5 +1,11 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useWorkflow } from "./workflow-provider";
+import { DestinationFields } from "./destination-fields";
+import { saveDesign } from "@/lib/design-store";
+import { defaultImageAdjustments, defaultCaption, type EditorDraft } from "@/lib/editor-draft";
 import {
   useEffect,
   useMemo,
@@ -37,6 +43,7 @@ import { DestinationIcon } from "./destination-icon";
 import artProofs from "@/lib/artwork-proofs.json";
 import {
   destinations,
+  contentTypeForDestination,
   featuredDestinations,
   templates,
   type DestinationId,
@@ -84,53 +91,61 @@ const modes = [
 
 export default function GeneratorStudio({
   initialArtwork,
-  brandStudy,
+  brandStudy: incomingBrandStudy,
+  resume = false,
   initialType = "website",
   initialMode,
   samplePortrait = false,
 }: {
   initialArtwork?: (typeof artworkDesigns)[number]["id"];
   brandStudy?: Study;
+  resume?: boolean;
   initialType?: DestinationId;
   initialMode?: GeneratorMode;
   samplePortrait?: boolean;
 }) {
-  const [kind, setKind] = useState<DestinationId>(initialType);
-  const [content, setContent] = useState<Content>({
+  const workflow = useWorkflow();
+  const router = useRouter();
+  const [seed] = useState(() => resume ? workflow.draft : null);
+  const brandStudy = seed?.brandStudy ?? incomingBrandStudy;
+  const [savedId, setSavedId] = useState(seed ? workflow.savedId : undefined);
+  const [name, setName] = useState(seed?.name || 'Untitled QR');
+  const [saving, setSaving] = useState(false);
+  const [destinationQuery, setDestinationQuery] = useState('');
+  const [adjustments, setAdjustments] = useState(seed?.adjustments || defaultImageAdjustments);
+  const [caption, setCaption] = useState(seed?.caption || defaultCaption);
+  const [logoFrame, setLogoFrame] = useState<'plain' | 'metal'>(seed?.logoFrame || 'plain');
+  const [kind, setKind] = useState<DestinationId>(seed?.kind || initialType);
+  const [content, setContent] = useState<Content>(seed?.content || {
     ...initialContent,
-    type:
-      initialType === "wifi"
-        ? "wifi"
-        : initialType === "vcard"
-          ? "vcard"
-          : "url",
+    type: contentTypeForDestination(initialType),
     url:
       brandStudy?.destination ||
       (initialType === "website" ? initialContent.url : ""),
   });
   const [mode, setMode] = useState<GeneratorMode>(
-    initialMode || (initialArtwork || brandStudy ? "art" : "custom"),
+    seed?.mode || initialMode || (initialArtwork || brandStudy ? "art" : "custom"),
   );
   const [tab, setTab] = useState("Designs");
   const [moreTypes, setMoreTypes] = useState(
-    !featuredDestinations.includes(initialType),
+    !featuredDestinations.includes(seed?.kind || initialType),
   );
-  const [appearance, setAppearance] = useState<Appearance>(templates[0]);
-  const [template, setTemplate] = useState("Essential");
-  const [art, setArt] = useState(initialArtwork || "dragon");
-  const [studyActive, setStudyActive] = useState(!!brandStudy);
-  const [customImage, setCustomImage] = useState("");
+  const [appearance, setAppearance] = useState<Appearance>(seed?.appearance || templates[0]);
+  const [template, setTemplate] = useState(seed?.template || "Essential");
+  const [art, setArt] = useState(seed?.art || initialArtwork || "dragon");
+  const [studyActive, setStudyActive] = useState(seed?.studyActive ?? !!brandStudy);
+  const [customImage, setCustomImage] = useState(seed?.customImage || "");
   const [logo, setLogo] = useState(
-    samplePortrait ? "/brand-studies/sample-portrait.png" : "",
+    seed?.logo || (samplePortrait ? "/brand-studies/sample-portrait.png" : ""),
   );
-  const [logoSize, setLogoSize] = useState(20);
+  const [logoSize, setLogoSize] = useState(seed?.logoSize ?? 20);
   const [strength, setStrength] = useState(
-    brandStudy?.strength ?? artProofs[initialArtwork || "dragon"].strength,
+    seed?.strength ?? brandStudy?.strength ?? artProofs[initialArtwork || "dragon"].strength,
   );
-  const [sizeMm, setSizeMm] = useState(70);
+  const [sizeMm, setSizeMm] = useState(seed?.sizeMm ?? 70);
   const [format, setFormat] = useState<"png" | "svg" | "pdf">("png");
-  const [showUtm, setShowUtm] = useState(false);
-  const [utm, setUtm] = useState({ source: "", medium: "", campaign: "" });
+  const [showUtm, setShowUtm] = useState(seed?.showUtm ?? false);
+  const [utm, setUtm] = useState(seed?.utm || { source: "", medium: "", campaign: "" });
   const [result, setResult] = useState<Rendered | null>(null);
   const [renderEpoch, setRenderEpoch] = useState(0);
   const [failure, setFailure] = useState<{
@@ -144,7 +159,7 @@ export default function GeneratorStudio({
   const uploadInput = useRef<HTMLInputElement>(null),
     logoInput = useRef<HTMLInputElement>(null);
   const uploads = useRef({ image: 0, logo: 0 });
-  const destinationDrafts = useRef<Partial<Record<DestinationId, string>>>({});
+  const destinationDrafts = useRef<Partial<Record<DestinationId, string>>>(seed?.destinationDrafts || {});
   const destinationFields = useRef<HTMLDivElement>(null);
   const designHeading = useRef<HTMLHeadingElement>(null);
   const previewHeading = useRef<HTMLHeadingElement>(null);
@@ -276,6 +291,29 @@ export default function GeneratorStudio({
     [],
   );
 
+  const draft = useMemo<EditorDraft>(() => ({
+    version: 1, kind, content, mode, appearance, template, art, brandStudy, studyActive,
+    customImage, logo, logoSize, logoFrame, strength, sizeMm, showUtm, utm, adjustments, caption, name,
+    destinationDrafts: { ...destinationDrafts.current },
+  }), [kind, content, mode, appearance, template, art, brandStudy, studyActive, customImage, logo, logoSize, logoFrame, strength, sizeMm, showUtm, utm, adjustments, caption, name]);
+  const artifact = useMemo(() => current && encoded.matrix && !uploading ? {
+    png: current.png, svg: current.svg, text: encoded.text, sizeMm, modules: encoded.matrix.size,
+    pristine: current.pristine, reduced: current.reduced, simulated: current.simulated, dimensionsPass,
+  } : null, [current, encoded.matrix, encoded.text, sizeMm, dimensionsPass, uploading]);
+  useEffect(() => { workflow.setDesign(draft, artifact, savedId); }, [draft, artifact, savedId, workflow.setDesign]);
+  async function save() {
+    if (!artifact || saving || uploading) return;
+    setSaving(true);
+    try { const item = await saveDesign(draft, artifact, savedId); setSavedId(item.id); setName(item.name); setMessage('Saved in this browser. Open My designs to revisit it.'); }
+    catch (e) { setMessage(e instanceof Error ? e.message : 'Could not save the design.'); }
+    finally { setSaving(false); }
+  }
+  function testDesign() {
+    if (!artifact || uploading) return;
+    workflow.setDesign(draft, artifact, savedId);
+    router.push('/scan-lab');
+  }
+
   function chooseType(id: DestinationId) {
     if (id === kind) return;
     if (content.type === "url") destinationDrafts.current[kind] = content.url;
@@ -284,7 +322,7 @@ export default function GeneratorStudio({
     setMessage("");
     setContent((c) => ({
       ...c,
-      type: id === "wifi" ? "wifi" : id === "vcard" ? "vcard" : "url",
+      type: contentTypeForDestination(id),
       url: destinationDrafts.current[id] || "",
     }));
   }
@@ -355,6 +393,11 @@ export default function GeneratorStudio({
     uploads.current.image++;
     uploads.current.logo++;
     setContent(initialContent);
+    setSavedId(undefined);
+    setName("Untitled QR");
+    setAdjustments(defaultImageAdjustments);
+    setCaption(defaultCaption);
+    setLogoFrame("plain");
     setKind("website");
     setMode("custom");
     setTab("Designs");
@@ -393,11 +436,11 @@ export default function GeneratorStudio({
     );
   }
   async function download() {
-    if (!ready || !current) return;
+    if (!ready || !current || uploading || exporting) return;
     setExporting(true);
     setMessage("");
     try {
-      await exportQR(current.svg, format, sizeMm);
+      await exportQR(current.svg, format, sizeMm, name);
       setMessage(
         "Downloaded. Test your QR on a phone and a physical proof before printing a batch.",
       );
@@ -426,6 +469,8 @@ export default function GeneratorStudio({
         <div className="generator-controls">
           <section className="generator-step">
             <Step number="1" title="Your destination" />
+            {resume && !seed && <p className="workflow-notice">That unsaved session has ended. <Link href="/designs">Open a saved design</Link>, or create a new one below.</p>}
+            <label className="workflow-search destination-search"><input aria-label="Search destinations" placeholder="Search destinations — Wi-Fi, contact, event…" value={destinationQuery} onChange={e=>{setDestinationQuery(e.target.value);if(e.target.value)setMoreTypes(true);}}/></label>
             <p className="destination-intro">What would you like to share?</p>
             <div
               className="destination-options"
@@ -474,7 +519,7 @@ export default function GeneratorStudio({
                 aria-label="More QR destinations"
               >
                 {destinations
-                  .filter((d) => !featuredDestinations.includes(d.id))
+                  .filter((d) => !featuredDestinations.includes(d.id) && `${d.name} ${d.description}`.toLowerCase().includes(destinationQuery.toLowerCase()))
                   .map((d) => (
                     <button
                       key={d.id}
@@ -489,6 +534,7 @@ export default function GeneratorStudio({
                   ))}
               </div>
             )}
+            {destinationQuery && !destinations.some(d=>`${d.name} ${d.description}`.toLowerCase().includes(destinationQuery.toLowerCase())) && <p role="status" className="generator-note">No destinations match. Try website, Wi-Fi or contact.</p>}
             <div
               className="destination-entry"
               ref={destinationFields}
@@ -503,54 +549,7 @@ export default function GeneratorStudio({
               <p className="destination-context" key={kind}>
                 {kindInfo.description}
               </p>
-              {content.type === "url" ? (
-                <Field
-                  label={kindInfo.field}
-                  value={content.url}
-                  placeholder={kindInfo.placeholder}
-                  onChange={(v) => update("url", v)}
-                  type="url"
-                />
-              ) : content.type === "wifi" ? (
-                <div className="generator-fields">
-                  <Field
-                    label="Network name"
-                    value={content.ssid}
-                    onChange={(v) => update("ssid", v)}
-                  />
-                  <Field
-                    label="Wi-Fi password"
-                    type="password"
-                    value={content.password}
-                    onChange={(v) => update("password", v)}
-                  />
-                  <p className="generator-note">
-                    Anyone scanning this QR can read the network credentials.
-                  </p>
-                </div>
-              ) : (
-                <div className="generator-fields">
-                  <Field
-                    label="Full name"
-                    value={content.name}
-                    onChange={(v) => update("name", v)}
-                  />
-                  <div className="generator-pair">
-                    <Field
-                      label="Email"
-                      value={content.email}
-                      onChange={(v) => update("email", v)}
-                      type="email"
-                    />
-                    <Field
-                      label="Phone"
-                      value={content.phone}
-                      onChange={(v) => update("phone", v)}
-                      type="tel"
-                    />
-                  </div>
-                </div>
-              )}
+              <DestinationFields kind={kind} content={content} onChange={setContent} />
               {content.type === "url" && (
                 <>
                   <div className="destination-tools">
@@ -1107,6 +1106,13 @@ export default function GeneratorStudio({
                   ? `RGB PDF · QR printed at ${sizeMm} mm.`
                   : "High-resolution PNG · complete design included."}
             </p>
+            <div className="workflow-save-panel">
+              <label className="generator-field"><span>Design name & file name</span><input value={name} maxLength={80} onChange={e=>setName(e.target.value)}/></label>
+              <button className="workflow-wide" disabled={!artifact || !!uploading} onClick={testDesign}>Test this design <ArrowRight size={16}/></button>
+              <button className="workflow-wide" disabled={!artifact || saving || !!uploading} onClick={()=>void save()}>{saving ? 'Saving…' : savedId ? 'Save new version' : 'Save design'}</button>
+              <Link href="/designs">My designs ↗</Link>
+              <p className="generator-note">Save keeps the destination, images and any credentials in this browser. Clearing site data removes saved designs.</p>
+            </div>
             <button className="generator-reset" onClick={reset}>
               <RotateCcw size={12} /> Reset design
             </button>

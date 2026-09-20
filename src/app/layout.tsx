@@ -8,6 +8,8 @@ import "./showcase.css";
 import "./art-studio.css";
 import "./generator.css";
 import "./obsidian.css";
+import { WorkflowProvider } from "@/components/workflow-provider";
+import "./workflow.css";
 import { MotionSystem } from "@/components/motion-system";
 const font = DM_Sans({
   subsets: ["latin"],
@@ -50,12 +52,14 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${font.variable} ${displayFont.variable} obsidian`}>
         <MotionSystem>
+        <WorkflowProvider>
           <a className="skip-link" href="#main">
             Skip to content
           </a>
           <Header />
           {children}
           <Footer />
+        </WorkflowProvider>
         </MotionSystem>
       </body>
     </html>

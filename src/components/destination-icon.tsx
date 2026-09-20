@@ -1,5 +1,9 @@
 import {
   Globe,
+  Phone,
+  Mail,
+  CalendarDays,
+  Text,
   Camera,
   Star,
   Wifi,
@@ -20,6 +24,12 @@ import {
 import type { DestinationId } from "@/lib/generator-options";
 const icons = {
   website: Globe,
+  text: Text,
+  phone: Phone,
+  sms: MessageCircle,
+  email: Mail,
+  location: MapPin,
+  event: CalendarDays,
   instagram: Camera,
   reviews: Star,
   wifi: Wifi,

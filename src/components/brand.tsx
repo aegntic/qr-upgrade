@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MobileNavigation } from "./mobile-navigation";
 import { MotionToggle } from "./motion-system";
 import { ArrowUpRight } from "lucide-react";
 export function Brand() {
@@ -23,12 +24,13 @@ export function Header() {
       <nav aria-label="Main navigation">
         <Link href="/generator">QR Generator</Link>
         <Link href="/scan-lab">Scan Lab</Link>
-        <Link href="/#features">Features</Link>
+        <Link href="/designs">My designs</Link>
         <Link href="/#examples">Examples</Link>
         <Link href="/#qr-types">QR types</Link>
       </nav>
       <div className="header-actions">
         <MotionToggle />
+        <MobileNavigation />
         <Link href="/generator" className="nav-cta">
           Open studio <ArrowUpRight size={16} />
         </Link>
@@ -46,6 +48,7 @@ export function Footer() {
       </div>
       <nav aria-label="Create">
         <strong>Create</strong>
+        <Link href="/designs">My designs</Link>
         <Link href="/generator?mode=custom">Custom QR</Link>
         <Link href="/generator?mode=image">Image QR</Link>
         <Link href="/generator?mode=art">QR Art</Link>

@@ -13,6 +13,7 @@ export default async function Generator({
   searchParams,
 }: {
   searchParams: Promise<{
+    resume?: string;
     art?: string;
     brand?: string;
     portrait?: string;
@@ -20,7 +21,7 @@ export default async function Generator({
     mode?: string;
   }>;
 }) {
-  const { art, brand, portrait, type, mode } = await searchParams;
+  const { art, brand, portrait, type, mode, resume } = await searchParams;
   const study = studies.find((s) => s.id === brand);
   const proof =
     study && (studyProofs as Record<string, { strength: number }>)[study.id];
@@ -36,7 +37,8 @@ export default async function Generator({
         <p>One destination. An entirely different impression.</p>
       </div>
       <GeneratorStudio
-        key={`${brandStudy?.id || initialArtwork || "custom"}:${portrait === "sample"}:${type || "website"}:${mode || ""}`}
+        resume={resume === "1"}
+        key={`${resume || "new"}:${brandStudy?.id || initialArtwork || "custom"}:${portrait === "sample"}:${type || "website"}:${mode || ""}`}
         initialArtwork={initialArtwork}
         brandStudy={brandStudy}
         samplePortrait={portrait === "sample"}
