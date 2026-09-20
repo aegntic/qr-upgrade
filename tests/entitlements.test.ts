@@ -94,12 +94,12 @@ test('proxy ignores a browser-forged plan and sends only its server-resolved tie
 });
 
 test('authenticated paid collection GET omits unknown capacity and survives billing outage',async()=>{
- const config:BillingConfig={account,enabled:true,key:'sk_test_fixture',webhookSecret:'whsec_fixture',pro:'price_pro',brand:'price_brand'};
+ const config:BillingConfig={account,enabled:true,key:'sk_test_fixture',webhookSecret:'whsec_fixture',pro:'price_pro',brand:'price_brand',portalConfiguration:'bpc_qrupgrade'};
  const binding={owner,customer_id:'cus_paid',mode:'test',reservation:null,tier:null,reserved_at:null,session_id:null,lease_until:0};
  const stripe={
   prices:{retrieve:async(id:string)=>({id,active:true,livemode:false,type:'recurring',recurring:{interval:'month',interval_count:1,usage_type:'licensed'},billing_scheme:'per_unit',unit_amount:id==='price_brand'?2500:1200,currency:'usd'})},
   customers:{retrieve:async()=>({id:'cus_paid',livemode:false,metadata:{owner}})},
-  subscriptions:{list:async()=>({data:[{customer:'cus_paid',livemode:false,status:'active',cancel_at_period_end:false,items:{data:[{quantity:1,price:{id:'price_brand'},current_period_end:123}]}}],has_more:false})}
+  subscriptions:{list:async()=>({data:[{customer:'cus_paid',livemode:false,status:'active',cancel_at:null,cancel_at_period_end:false,items:{data:[{quantity:1,price:{id:'price_brand'},current_period_end:123}]}}],has_more:false})}
  } as unknown as Stripe;
  const verified=await resolveEntitlement(owner,config,{stripe,fetch:async()=>Response.json({binding})});assert.equal(verified.tier,'brand');assert.equal(verified.limits.dynamicLinks,500);
 

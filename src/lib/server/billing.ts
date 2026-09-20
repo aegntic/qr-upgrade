@@ -3,9 +3,9 @@ import {randomBytes} from 'node:crypto';
 import {accountConfig,configured,accountOrigin,accountSameOrigin,accountReply,checkedAccount,type AccountConfig} from './account';
 import {PLAN_LIMITS} from '../../../shared/plan-limits.mjs';
 import type {BillingPlan,BillingStatus,BillingTier,Entitlement} from '../billing-types';
-export type BillingConfig={account:AccountConfig;enabled:boolean;key?:string;webhookSecret?:string;pro?:string;brand?:string};
-export function billingConfig():BillingConfig{return {account:accountConfig(),enabled:process.env.BILLING_ENABLED==='true',key:process.env.STRIPE_SECRET_KEY,webhookSecret:process.env.STRIPE_WEBHOOK_SECRET,pro:process.env.STRIPE_PRICE_PRO,brand:process.env.STRIPE_PRICE_BRAND};}
-export function billingReady(c:BillingConfig){return c.enabled&&configured(c.account)&&/^(sk|rk)_(test|live)_[A-Za-z0-9]+$/.test(c.key||'')&&!!c.webhookSecret&&/^price_[A-Za-z0-9]+$/.test(c.pro||'')&&/^price_[A-Za-z0-9]+$/.test(c.brand||'')&&c.pro!==c.brand;}
+export type BillingConfig={account:AccountConfig;enabled:boolean;key?:string;webhookSecret?:string;pro?:string;brand?:string;portalConfiguration?:string};
+export function billingConfig():BillingConfig{return {account:accountConfig(),enabled:process.env.BILLING_ENABLED==='true',key:process.env.STRIPE_SECRET_KEY,webhookSecret:process.env.STRIPE_WEBHOOK_SECRET,pro:process.env.STRIPE_PRICE_PRO,brand:process.env.STRIPE_PRICE_BRAND,portalConfiguration:process.env.STRIPE_PORTAL_CONFIGURATION};}
+export function billingReady(c:BillingConfig){return c.enabled&&configured(c.account)&&/^(sk|rk)_(test|live)_[A-Za-z0-9]+$/.test(c.key||'')&&!!c.webhookSecret&&/^price_[A-Za-z0-9]+$/.test(c.pro||'')&&/^price_[A-Za-z0-9]+$/.test(c.brand||'')&&c.pro!==c.brand&&/^bpc_[A-Za-z0-9]+$/.test(c.portalConfiguration||'');}
 export type BillingDeps={stripe?:Stripe;fetch?:typeof fetch};
 type Binding={owner:string;customer_id:string;mode:'test'|'live';reservation:string|null;tier:BillingTier|null;reserved_at:number|null;session_id:string|null;lease_until:number};
 const blocked=new Set(['active','trialing','past_due','unpaid','incomplete','paused']);
@@ -29,6 +29,16 @@ async function plans(s:Stripe,c:BillingConfig):Promise<BillingPlan[]>{
   return {id:tier,name:tier==='pro'?'Pro':'Brand',amount:p.unit_amount!,currency:p.currency,interval:p.recurring.interval as 'month'|'year',intervalCount:p.recurring.interval_count,limits:PLAN_LIMITS[tier]};
  }));
 }
+async function portalConfiguration(s:Stripe,c:BillingConfig){
+ const portal=await s.billingPortal.configurations.retrieve(c.portalConfiguration!);
+ if(portal.id!==c.portalConfiguration||portal.livemode!==(mode(c)==='live')||portal.active!==true||portal.features?.subscription_cancel?.enabled!==true||portal.features.subscription_cancel.mode!=='at_period_end'||portal.features.subscription_cancel.proration_behavior!=='none'||portal.features?.subscription_update?.enabled!==false)throw new Error('Invalid portal configuration');
+ return portal.id;
+}
+function timestamp(value:unknown,nullable=false):number|null{
+ if(nullable&&value===null)return null;
+ if(typeof value!=='number'||!Number.isSafeInteger(value)||value<=0||!Number.isFinite(new Date(value*1000).getTime()))throw new Error('Invalid subscription timestamp');
+ return value;
+}
 async function subscriptions(s:Stripe,c:BillingConfig,b:Binding,owner=b.owner){
  if(b.owner!==owner)throw new Error('Owner mismatch');
  if(b.mode!==mode(c))throw new Error('Mode mismatch');
@@ -37,7 +47,12 @@ async function subscriptions(s:Stripe,c:BillingConfig,b:Binding,owner=b.owner){
  if(list.data.some(x=>id(x.customer)!==b.customer_id||x.livemode!==(mode(c)==='live')))throw new Error('Subscription mismatch');
  const current=list.data.filter(x=>blocked.has(x.status));
  if(current.some(x=>x.items.has_more||x.items.data.some(item=>[c.pro,c.brand].includes(item.price.id)&&item.quantity!==1)))throw new Error('Subscription item mismatch');
- const mapped=current.flatMap(sub=>sub.items.data.filter(item=>item.quantity===1&&[c.pro,c.brand].includes(item.price.id)).map(item=>({tier:(item.price.id===c.pro?'pro':'brand') as BillingTier,status:sub.status,cancelAtPeriodEnd:sub.cancel_at_period_end,currentPeriodEnd:item.current_period_end})));
+ const mapped=current.flatMap(sub=>sub.items.data.filter(item=>item.quantity===1&&[c.pro,c.brand].includes(item.price.id)).map(item=>{
+  if(typeof sub.cancel_at_period_end!=='boolean')throw new Error('Invalid cancellation flag');
+  const currentPeriodEnd=timestamp(item.current_period_end)!;
+  const cancelAt=timestamp(sub.cancel_at,true);
+  return {tier:(item.price.id===c.pro?'pro':'brand') as BillingTier,status:sub.status,cancelAtPeriodEnd:sub.cancel_at_period_end,scheduledCancellationAt:cancelAt??(sub.cancel_at_period_end?currentPeriodEnd:null),currentPeriodEnd};
+ }));
  if(mapped.length>1)throw new Error('Ambiguous subscription');
  return {blocked:current.length>0,subscription:mapped[0]||null};
 }
@@ -80,10 +95,11 @@ export async function billingAction(r:Request,action:'checkout'|'portal',c=billi
   const s=client(c,d);await plans(s,c);
   let b=(await service(c,d,'/billing',user.id)).binding;
   if(!b&&action==='portal')return accountReply({error:'No billing account yet.'},409);
+  const portalConfigurationId=await portalConfiguration(s,c);
   if(!b){const customer=await s.customers.create({metadata:{owner:user.id}},{idempotencyKey:`qr-customer-${mode(c)}-${user.id}`});b=(await service(c,d,'/billing/customer',user.id,{customerId:customer.id,mode:mode(c)},'PUT')).binding;}
   if(!b||b.owner!==user.id)throw new Error();
   const current=await subscriptions(s,c,b);
-  if(action==='portal'||current.blocked){const portal=await s.billingPortal.sessions.create({customer:b.customer_id,return_url:`${accountOrigin(c.account)}/billing`});return accountReply({url:hosted(portal.url,'billing.stripe.com')});}
+  if(action==='portal'||current.blocked){const portal=await s.billingPortal.sessions.create({customer:b.customer_id,return_url:`${accountOrigin(c.account)}/billing`,configuration:portalConfigurationId});return accountReply({url:hosted(portal.url,'billing.stripe.com')});}
   b=(await service(c,d,'/billing/checkout',user.id,{action:'reserve',tier,token:randomBytes(16).toString('hex')})).binding;if(!b?.reservation||!b.tier||!b.reserved_at)throw new Error();
   let session:Stripe.Checkout.Session;
   if(b.session_id)session=await s.checkout.sessions.retrieve(b.session_id);
