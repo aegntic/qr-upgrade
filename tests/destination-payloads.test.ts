@@ -68,3 +68,8 @@ test("maps structured catalog destinations while retaining URL families", () => 
   assert.equal(contentTypeForDestination("event"), "event");
   assert.equal(contentTypeForDestination("instagram"), "url");
 });
+
+test("preserves significant Wi-Fi SSID and password whitespace", () => {
+  assert.equal(payload({ ...base, type: "wifi", ssid: " Guest ", password: " pass ", wifiEncryption: "WPA" }), "WIFI:T:WPA;S: Guest ;P: pass ;;");
+  assert.throws(() => payload({ ...base, type: "wifi", ssid: "   " }), /network name/);
+});

@@ -196,7 +196,8 @@ export function payload(content: Content): string {
     lines.push("END:VEVENT", "END:VCALENDAR");
     result = lines.join("\r\n");
   } else if (content.type === "wifi") {
-    const ssid = requireValue(content.ssid, "Enter your Wi-Fi network name.");
+    requireValue(content.ssid, "Enter your Wi-Fi network name.");
+    const ssid = content.ssid;
     if (content.password && controls.test(content.password))
       throw new Error("Remove control characters from the Wi-Fi password.");
     const encryption = content.wifiEncryption || (content.password ? "WPA" : "nopass");

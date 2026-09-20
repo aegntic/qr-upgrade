@@ -258,9 +258,9 @@ export default function GeneratorStudio({
             ? { src: logo, sizePercent: logoSize, frame: logoFrame }
             : undefined,
           mode !== "custom",
-          { adjustments, caption },
+          { adjustments: mode === "custom" ? defaultImageAdjustments : adjustments, caption },
         );
-        const identityAdjustments = JSON.stringify(adjustments) === JSON.stringify(defaultImageAdjustments);
+        const identityAdjustments = mode === "custom" || JSON.stringify(adjustments) === JSON.stringify(defaultImageAdjustments);
         if (mode === "custom" && !logo && !caption.text.trim() && identityAdjustments && encoded.matrix)
           rendered.svg = qrSvg(encoded.matrix, appearance);
         const proof = await validateRendered(rendered.svg, encoded.text, {
@@ -522,6 +522,7 @@ export default function GeneratorStudio({
             >
               {featuredDestinations
                 .map((id) => destinations.find((d) => d.id === id)!)
+                .filter(d => `${d.name} ${d.description}`.toLowerCase().includes(destinationQuery.trim().toLowerCase()))
                 .map((d) => (
                   <button
                     key={d.id}
@@ -562,7 +563,7 @@ export default function GeneratorStudio({
                 aria-label="More QR destinations"
               >
                 {destinations
-                  .filter((d) => !featuredDestinations.includes(d.id) && `${d.name} ${d.description}`.toLowerCase().includes(destinationQuery.toLowerCase()))
+                  .filter((d) => !featuredDestinations.includes(d.id) && `${d.name} ${d.description}`.toLowerCase().includes(destinationQuery.trim().toLowerCase()))
                   .map((d) => (
                     <button
                       key={d.id}
@@ -577,7 +578,7 @@ export default function GeneratorStudio({
                   ))}
               </div>
             )}
-            {destinationQuery && !destinations.some(d=>`${d.name} ${d.description}`.toLowerCase().includes(destinationQuery.toLowerCase())) && <p role="status" className="generator-note">No destinations match. Try website, Wi-Fi or contact.</p>}
+            {destinationQuery && !destinations.some(d=>`${d.name} ${d.description}`.toLowerCase().includes(destinationQuery.trim().toLowerCase())) && <p role="status" className="generator-note">No destinations match. Try website, Wi-Fi or contact.</p>}
             <div
               className="destination-entry"
               ref={destinationFields}
@@ -810,7 +811,7 @@ export default function GeneratorStudio({
                       <p className="generator-note">
                         Choose an AI-created artwork and weave in your
                         destination.{" "}
-                        <a href="/brand-studies">Explore brand studies ↗</a>
+                        <Link href="/brand-studies">Explore brand studies ↗</Link>
                       </p>
                       {studyActive && brandStudy && (
                         <p className="generator-note">
