@@ -1,4 +1,4 @@
-import type { Appearance } from "./qr";
+import type { Appearance, ContentType } from "./qr";
 
 export const destinations = [
   {
@@ -96,9 +96,9 @@ export const destinations = [
     name: "WhatsApp",
     mark: "◔",
     color: "#84c6a0",
-    field: "WhatsApp chat or channel URL",
-    placeholder: "https://wa.me/…",
-    description: "Give people a direct route to your chat.",
+    field: "WhatsApp phone number",
+    placeholder: "+61 400 000 000",
+    description: "Start a WhatsApp chat with an optional ready-to-send message.",
   },
   {
     id: "facebook",
@@ -163,8 +163,67 @@ export const destinations = [
     placeholder: "https://forms.gle/…",
     description: "Open a form, survey or registration page.",
   },
+  {
+    id: "text",
+    name: "Plain text",
+    mark: "T",
+    color: "#a8a3d7",
+    field: "Text",
+    placeholder: "A short message or reference",
+    description: "Show text immediately after scanning.",
+  },
+  {
+    id: "phone",
+    name: "Phone call",
+    mark: "☎",
+    color: "#76b7c9",
+    field: "Phone number",
+    placeholder: "+61 400 000 000",
+    description: "Open the scanner's phone app with a number ready.",
+  },
+  {
+    id: "sms",
+    name: "Text message",
+    mark: "✉",
+    color: "#83c5a3",
+    field: "SMS phone number",
+    placeholder: "+61 400 000 000",
+    description: "Prepare an SMS with a number and optional message.",
+  },
+  {
+    id: "email",
+    name: "Email",
+    mark: "@",
+    color: "#d49a7e",
+    field: "Email address",
+    placeholder: "hello@example.com",
+    description: "Prepare an email with an optional subject and message.",
+  },
+  {
+    id: "location",
+    name: "Coordinates",
+    mark: "⌖",
+    color: "#91ba88",
+    field: "Latitude",
+    placeholder: "-33.8688",
+    description: "Open exact latitude and longitude coordinates in a map.",
+  },
+  {
+    id: "event",
+    name: "Calendar event",
+    mark: "▦",
+    color: "#c59bda",
+    field: "Event title",
+    placeholder: "Opening night",
+    description: "Add a dated event to the scanner's calendar.",
+  },
 ] as const;
 export type DestinationId = (typeof destinations)[number]["id"];
+export function contentTypeForDestination(id: DestinationId): ContentType {
+  if (["wifi", "vcard", "text", "phone", "sms", "email", "whatsapp", "location", "event"].includes(id))
+    return id as ContentType;
+  return "url";
+}
 export const featuredDestinations: DestinationId[] = [
   "website",
   "instagram",
