@@ -71,10 +71,34 @@ export async function billingAction(r:Request,action:'checkout'|'portal',c=billi
    // Never discard an ambiguous create. Replay the exact request with its stored key.
    // After 23 hours Stripe may evict a key; require operator reconciliation instead.
    if(Date.now()/1000-b.reserved_at>23*3600)throw new Error('Reconciliation required');
-   session=await s.checkout.sessions.create({mode:'subscription',customer:b.customer_id,line_items:[{price:c[b.tier]!,quantity:1}],metadata:{owner:user.id},subscription_data:{metadata:{owner:user.id}},success_url:`${accountOrigin(c.account)}/billing?checkout=returned`,cancel_url:`${accountOrigin(c.account)}/billing?checkout=cancelled`,expires_at:b.reserved_at+1860},{idempotencyKey:`qr-checkout-${mode(c)}-${user.id}-${b.reservation}`});
+   try {session=await s.checkout.sessions.create({mode:'subscription',customer:b.customer_id,line_items:[{price:c[b.tier]!,quantity:1}],metadata:{owner:user.id},subscription_data:{metadata:{owner:user.id}},success_url:`${accountOrigin(c.account)}/billing?checkout=returned`,cancel_url:`${accountOrigin(c.account)}/billing?checkout=cancelled`,expires_at:b.reserved_at+1860},{idempotencyKey:`qr-checkout-${mode(c)}-${user.id}-${b.reservation}`});
+   }catch(error){
+    // Only Stripe's definitive parameter rejection proves this replay did not execute.
+    // Network errors, 5xx and idempotency conflicts remain uncertain and keep the key.
+    if(error instanceof Stripe.errors.StripeInvalidRequestError&&error.statusCode===400&&error.param==='expires_at'&&error.requestId&&b.reserved_at+1860<Math.floor(Date.now()/1000)+1800){
+     await service(c,d,'/billing/checkout',user.id,{action:'release',token:b.reservation});
+     return accountReply({error:'Checkout could not start before its expiry window. Please try again.'},409);
+    }
+    throw error;
+   }
   }
   if(id(session.customer)!==b.customer_id||session.livemode!==(mode(c)==='live')||session.mode!=='subscription')throw new Error('Session mismatch');
   if(session.status==='expired'){await service(c,d,'/billing/checkout',user.id,{action:'release',token:b.reservation});return accountReply({error:'The previous checkout expired. Please try again.'},409);}
+  if(session.status==='complete'){
+   const subscriptionId=id(session.subscription);
+   if(subscriptionId){
+    const associated=await s.subscriptions.retrieve(subscriptionId);
+    if(associated.id!==subscriptionId||id(associated.customer)!==b.customer_id||associated.livemode!==(mode(c)==='live'))throw new Error('Subscription mismatch');
+    if(['canceled','incomplete_expired'].includes(associated.status)){
+     // Recheck all subscriptions after retrieving the completed session's subscription.
+     // A terminal old subscription alone cannot justify a new checkout.
+     if(!(await subscriptions(s,c,b)).blocked){
+      await service(c,d,'/billing/checkout',user.id,{action:'release',token:b.reservation});
+      return accountReply({error:'The previous subscription ended. Please try again to start a new checkout.'},409);
+     }
+    }
+   }
+  }
   if(session.status!=='open')return accountReply({error:'Checkout is processing. Refresh billing shortly.'},409);
   const url=hosted(session.url,'checkout.stripe.com');
   await service(c,d,'/billing/checkout',user.id,{action:'finalize',token:b.reservation,sessionId:session.id});return accountReply({url});

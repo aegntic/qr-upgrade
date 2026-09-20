@@ -10,7 +10,7 @@ const owner='a'.repeat(64),other='b'.repeat(64);
 const c:BillingConfig={enabled:true,key:'sk_test_fixture',webhookSecret:'whsec_fixture',pro:'price_pro',brand:'price_brand',account:{clientId:'test',clientSecret:'test',secret:'s'.repeat(64),serviceUrl:'https://service.example',development:true}};
 function db(){const sqlite=new DatabaseSync(':memory:');sqlite.exec(readFileSync(new URL('../workers/qr-service/migrations/0005_billing.sql',import.meta.url),'utf8'));const wrap=(sql:string,values:any[]=[])=>({bind:(...v:any[])=>wrap(sql,v),first:async()=>sqlite.prepare(sql).get(...values)||null});return {sqlite,DB:{prepare:wrap}};}
 function req(path='/billing',method='GET',body?:unknown,user=owner){return new Request('https://service.example'+path,{method,headers:{'x-qr-user':user,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});}
-function fixture(){const env=db();let creates=0;const sessions=new Map<string,any>();const subs:any[]=[];const s={prices:{retrieve:async(id:string)=>({id,active:true,livemode:false,type:'recurring',recurring:{interval:'month',interval_count:1,usage_type:'licensed'},billing_scheme:'per_unit',unit_amount:1200,currency:'usd'})},customers:{create:async()=>({id:'cus_fixture'}),retrieve:async()=>({id:'cus_fixture',livemode:false,metadata:{owner}})},subscriptions:{list:async()=>({data:subs,has_more:false})},checkout:{sessions:{create:async(p:any,o:any)=>{creates++;assert.equal(p.customer,'cus_fixture');assert.equal(p.line_items[0].quantity,1);assert.equal(p.success_url,'http://localhost:3040/billing?checkout=returned');assert.equal(p.cancel_url,'http://localhost:3040/billing?checkout=cancelled');const session=sessions.get(o.idempotencyKey)||{id:'cs_test_fixture',customer:'cus_fixture',livemode:false,mode:'subscription',status:'open',url:'https://checkout.stripe.com/c/pay/fixture'};sessions.set(o.idempotencyKey,session);return session;},retrieve:async()=>[...sessions.values()][0]}},billingPortal:{sessions:{create:async(p:any)=>{assert.equal(p.return_url,'http://localhost:3040/billing');return {url:'https://billing.stripe.com/p/session/fixture'};}}},webhooks:new Stripe('sk_test_fixture').webhooks};const fetcher:typeof fetch=async(input,init)=>billingRequest(new Request(input as string,init),env);return {env,s,subs,sessions,deps:{stripe:s as unknown as Stripe,fetch:fetcher},get creates(){return creates;}};}
+function fixture(){const env=db();let creates=0;const sessions=new Map<string,any>();const subs:any[]=[];const s={prices:{retrieve:async(id:string)=>({id,active:true,livemode:false,type:'recurring',recurring:{interval:'month',interval_count:1,usage_type:'licensed'},billing_scheme:'per_unit',unit_amount:1200,currency:'usd'})},customers:{create:async()=>({id:'cus_fixture'}),retrieve:async()=>({id:'cus_fixture',livemode:false,metadata:{owner}})},subscriptions:{list:async()=>({data:subs,has_more:false}),retrieve:async(id:string)=>{const sub=subs.find(x=>x.id===id);if(!sub)throw new Error('Not found');return sub;}},checkout:{sessions:{create:async(p:any,o:any)=>{creates++;assert.equal(p.customer,'cus_fixture');assert.equal(p.line_items[0].quantity,1);assert.equal(p.success_url,'http://localhost:3040/billing?checkout=returned');assert.equal(p.cancel_url,'http://localhost:3040/billing?checkout=cancelled');const session=sessions.get(o.idempotencyKey)||{id:`cs_test_fixture${sessions.size}`,customer:'cus_fixture',livemode:false,mode:'subscription',status:'open',url:'https://checkout.stripe.com/c/pay/fixture'};sessions.set(o.idempotencyKey,session);return session;},retrieve:async(id:string)=>[...sessions.values()].find(x=>x.id===id)}},billingPortal:{sessions:{create:async(p:any)=>{assert.equal(p.return_url,'http://localhost:3040/billing');return {url:'https://billing.stripe.com/p/session/fixture'};}}},webhooks:new Stripe('sk_test_fixture').webhooks};const fetcher:typeof fetch=async(input,init)=>billingRequest(new Request(input as string,init),env);return {env,s,subs,sessions,deps:{stripe:s as unknown as Stripe,fetch:fetcher},get creates(){return creates;}};}
 async function browser(body:unknown={tier:'pro'},origin='http://localhost:3040'){const token=await signAccountToken({sub:owner,name:'Fixture',email:'fixture@example.com'},'session',c.account);return new Request('http://localhost:3040/api/billing/checkout',{method:'POST',headers:{origin,cookie:`qr-session=${token}`,'Content-Type':'application/json'},body:JSON.stringify(body)});}
 test('disabled readiness and anonymous offers; bad configured prices and network fail closed',async()=>{const f=fixture();assert.equal(billingReady({...c,brand:c.pro}),false);const off=await billingStatus(req(),{...c,enabled:false},f.deps);assert.deepEqual(await off.json(),{configured:false,signedIn:false,plans:[],subscription:null,canManage:false});const on=await(await billingStatus(req(),c,f.deps)).json();assert.equal(on.plans[0].amount,1200);assert.equal(on.signedIn,false);f.s.prices.retrieve=async()=>{throw new Error('private');};assert.equal((await billingStatus(req(),c,f.deps)).status,503);f.env.sqlite.close();});
 test('auth, same-origin, exact payload and bounded body gates',async()=>{const f=fixture();assert.equal((await billingAction(req(),'checkout',c,f.deps)).status,401);assert.equal((await billingAction(await browser({},'https://evil.example'),'checkout',c,f.deps)).status,403);for(const b of [{tier:'pro',customer:'cus_other'},{tier:'unknown'},[],null,{tier:'pro',x:'x'.repeat(1100)}])assert.equal((await billingAction(await browser(b),'checkout',c,f.deps)).status,400);assert.equal((await billingAction(await browser({customer:'cus_other'}),'portal',c,f.deps)).status,400);await assert.rejects(()=>readBillingBody(new Request('https://example.com',{method:'POST',body:'x'.repeat(1025)})));f.env.sqlite.close();});
@@ -20,3 +20,73 @@ test('ambiguous provider response preserves reservation and recovers same idempo
 test('real SDK signatures reject tamper, expired replay, cross-mode and oversize; durable events deduplicate unordered delivery',async()=>{const f=fixture();await billingRequest(req('/billing/customer','PUT',{customerId:'cus_fixture',mode:'test'}),f.env);const sdk=new Stripe('sk_test_fixture');const make=(event:any,timestamp=Math.floor(Date.now()/1000),bad=false)=>{const payload=JSON.stringify(event);return new Request('https://qrupgrade.com/api/billing/webhook',{method:'POST',headers:{'stripe-signature':bad?'bad':sdk.webhooks.generateTestHeaderString({payload,secret:c.webhookSecret!,timestamp})},body:payload});};const event={id:'evt_fixture',type:'customer.subscription.updated',created:100,livemode:false,data:{object:{object:'subscription',id:'sub_fixture',customer:'cus_fixture'}}};assert.equal((await billingWebhook(make(event,1),c,f.deps)).status,400);assert.equal((await billingWebhook(make(event,undefined,true),c,f.deps)).status,400);assert.equal((await billingWebhook(make({...event,livemode:true}),c,f.deps)).status,400);assert.equal((await billingWebhook(make({...event,x:'a'.repeat(256*1024)}),c,f.deps)).status,400);for(const e of [event,event,{...event,id:'evt_older',created:50}])assert.equal((await billingWebhook(make(e),c,f.deps)).status,200);assert.equal(f.env.sqlite.prepare('SELECT COUNT(*) AS n FROM billing_events').get()!.n,2);assert.equal((await billingWebhook(make({...event,id:'evt_unknown',data:{object:{...event.data.object,customer:'cus_unknown'}}}),c,f.deps)).status,200);assert.equal(f.env.sqlite.prepare('SELECT COUNT(*) AS n FROM billing_events').get()!.n,2);const badDeps={...f.deps,fetch:async()=>{throw new Error('offline');}};assert.equal((await billingWebhook(make(event),c,badDeps)).status,503);f.env.sqlite.close();});
 test('invalid configured prices, subscription overflow and untrusted hosted URLs fail unavailable',async()=>{const f=fixture();const price=f.s.prices.retrieve;for(const patch of [{active:false},{unit_amount:0},{currency:'USD!'},{livemode:true},{recurring:{interval:'week',interval_count:1,usage_type:'licensed'}},{billing_scheme:'tiered'}]){f.s.prices.retrieve=async(id)=>({...await price(id),...patch}) as any;assert.equal((await billingStatus(req(),c,f.deps)).status,503);}f.s.prices.retrieve=price;await billingAction(await browser(),'checkout',c,f.deps);const listing=f.s.subscriptions.list;f.s.subscriptions.list=async()=>({data:[],has_more:true});assert.equal((await billingStatus(await browser(),c,f.deps)).status,503);f.s.subscriptions.list=listing;f.s.billingPortal.sessions.create=async()=>({url:'https://billing.stripe.com.evil.example/pay'});assert.equal((await billingAction(await browser({}),'portal',c,f.deps)).status,503);f.env.sqlite.close();});
 test('reservation replay retains exact create payload; stale ambiguity requires reconciliation',async()=>{const f=fixture(),create=f.s.checkout.sessions.create;let original='';f.s.checkout.sessions.create=async(p,o)=>{if(original)assert.equal(JSON.stringify(p),original);else original=JSON.stringify(p);await create(p,o);throw new Error('ambiguous');};await billingAction(await browser(),'checkout',c,f.deps);f.env.sqlite.prepare('UPDATE billing_customers SET lease_until=0').run();await billingAction(await browser({tier:'brand'}),'checkout',c,f.deps);assert.equal(f.creates,2);f.env.sqlite.prepare('UPDATE billing_customers SET lease_until=0,reserved_at=?').run(Math.floor(Date.now()/1000)-24*3600);assert.equal((await billingAction(await browser(),'checkout',c,f.deps)).status,503);assert.equal(f.creates,2);f.env.sqlite.close();});
+
+test('completed canceled or incomplete_expired subscriptions can start a fresh checkout',async()=>{
+ for(const status of ['canceled','incomplete_expired']){
+  const f=fixture();
+  assert.equal((await billingAction(await browser(),'checkout',c,f.deps)).status,200);
+  const session=[...f.sessions.values()][0];session.status='complete';session.subscription='sub_ended';
+  f.subs.push({id:'sub_ended',customer:'cus_fixture',livemode:false,status,items:{data:[]}});
+  const old=f.env.sqlite.prepare('SELECT reservation FROM billing_customers').get()!.reservation;
+  const retired=await billingAction(await browser(),'checkout',c,f.deps);assert.equal(retired.status,409);
+  assert.equal(f.env.sqlite.prepare('SELECT reservation FROM billing_customers').get()!.reservation,null);
+  assert.equal((await billingAction(await browser({tier:'brand'}),'checkout',c,f.deps)).status,200);
+  assert.equal(f.sessions.size,2);assert.equal(f.creates,2);
+  assert.notEqual(f.env.sqlite.prepare('SELECT reservation FROM billing_customers').get()!.reservation,old);
+  f.env.sqlite.close();
+ }
+});
+test('completed checkout keeps its reservation while associated subscription is uncertain or another subscription blocks',async()=>{
+ for(const reason of ['missing','processing','wrong-owner','wrong-mode','new-blocker']){
+  const f=fixture();await billingAction(await browser(),'checkout',c,f.deps);
+  const session=[...f.sessions.values()][0];session.status='complete';session.subscription='sub_ended';
+  const reservation=f.env.sqlite.prepare('SELECT reservation FROM billing_customers').get()!.reservation;
+  if(reason!=='missing')f.s.subscriptions.retrieve=async()=>({id:'sub_ended',customer:reason==='wrong-owner'?'cus_other':'cus_fixture',livemode:reason==='wrong-mode',status:reason==='processing'?'incomplete':'canceled'});
+  if(reason==='new-blocker'){let reads=0;f.s.subscriptions.list=async()=>({data:++reads===1?[]:[{id:'sub_new',customer:'cus_fixture',livemode:false,status:'active',items:{data:[]}}],has_more:false});}
+  const result=await billingAction(await browser(),'checkout',c,f.deps);
+  assert.equal(result.status,['missing','wrong-owner','wrong-mode'].includes(reason)?503:409);
+  assert.equal(f.env.sqlite.prepare('SELECT reservation FROM billing_customers').get()!.reservation,reservation);
+  assert.equal(f.creates,1);f.env.sqlite.close();
+ }
+});
+test('precreation outage recovers after actual lease expiry using definitive Stripe expiry rejection',async()=>{
+ const f=fixture(),originalNow=Date.now,create=f.s.checkout.sessions.create;let now=originalNow(),calls=0,originalKey='',originalPayload='';
+ Date.now=()=>now;
+ try{
+  f.s.checkout.sessions.create=async(p,o)=>{
+   calls++;
+   if(calls===1){originalKey=o.idempotencyKey;originalPayload=JSON.stringify(p);throw new Error('Connection failed before request reached Stripe');}
+   if(calls===2){assert.equal(o.idempotencyKey,originalKey);assert.equal(JSON.stringify(p),originalPayload);assert.equal(p.expires_at-Math.floor(now/1000),1799);
+    throw new Stripe.errors.StripeInvalidRequestError({message:'expires_at must be at least 30 minutes after creation',param:'expires_at',statusCode:400,requestId:'req_expiry'});
+   }
+   assert.notEqual(o.idempotencyKey,originalKey);assert.ok(p.expires_at>=Math.floor(now/1000)+1800);return create(p,o);
+  };
+  assert.equal((await billingAction(await browser(),'checkout',c,f.deps)).status,503);
+  const reservation=f.env.sqlite.prepare('SELECT reservation FROM billing_customers').get()!.reservation;
+  now+=59000;assert.equal((await billingAction(await browser(),'checkout',c,f.deps)).status,503);assert.equal(calls,1);
+  now+=2000;assert.equal((await billingAction(await browser(),'checkout',c,f.deps)).status,409);
+  assert.equal(f.env.sqlite.prepare('SELECT reservation FROM billing_customers').get()!.reservation,null);
+  assert.equal((await billingAction(await browser(),'checkout',c,f.deps)).status,200);
+  assert.notEqual(f.env.sqlite.prepare('SELECT reservation FROM billing_customers').get()!.reservation,reservation);
+  assert.equal(f.sessions.size,1);assert.equal(f.creates,1);
+ }finally{Date.now=originalNow;f.env.sqlite.close();}
+});
+test('ambiguous execution after lease expiry recovers cached session without replacing key or expiry',async()=>{
+ const f=fixture(),originalNow=Date.now,create=f.s.checkout.sessions.create;let now=originalNow(),first=true,payload='',key='';Date.now=()=>now;
+ try{
+  f.s.checkout.sessions.create=async(p,o)=>{if(first){payload=JSON.stringify(p);key=o.idempotencyKey;first=false;await create(p,o);throw new Error('Response lost');}assert.equal(JSON.stringify(p),payload);assert.equal(o.idempotencyKey,key);return create(p,o);};
+  assert.equal((await billingAction(await browser(),'checkout',c,f.deps)).status,503);now+=61000;
+  assert.equal((await billingAction(await browser({tier:'brand'}),'checkout',c,f.deps)).status,200);assert.equal(f.sessions.size,1);
+ }finally{Date.now=originalNow;f.env.sqlite.close();}
+});
+test('network, 5xx, idempotency and other parameter errors never retire an uncertain reservation',async()=>{
+ for(const failure of [new Error('Connection lost'),new Stripe.errors.StripeAPIError({message:'Internal',statusCode:500,requestId:'req_500'}),new Stripe.errors.StripeIdempotencyError({message:'Conflict',statusCode:400,requestId:'req_conflict'}),new Stripe.errors.StripeInvalidRequestError({message:'Other',param:'customer',statusCode:400,requestId:'req_other'})]){
+  const f=fixture(),originalNow=Date.now;let now=originalNow();Date.now=()=>now;
+  try{
+   f.s.checkout.sessions.create=async()=>{throw failure;};assert.equal((await billingAction(await browser(),'checkout',c,f.deps)).status,503);
+   const reservation=f.env.sqlite.prepare('SELECT reservation FROM billing_customers').get()!.reservation;now+=61000;
+   assert.equal((await billingAction(await browser(),'checkout',c,f.deps)).status,503);
+   assert.equal(f.env.sqlite.prepare('SELECT reservation FROM billing_customers').get()!.reservation,reservation);assert.equal(f.sessions.size,0);
+  }finally{Date.now=originalNow;f.env.sqlite.close();}
+ }
+});
