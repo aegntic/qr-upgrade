@@ -2,6 +2,7 @@ import { withWebEntry } from '../cloudflare/runtime';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createArtHandler, sameOrigin } from '../src/lib/server/art-service';
+import { POST as artRoutePost } from '../src/app/api/art/route';
 import worker, { validateArtInput } from '../workers/qr-service/worker.mjs';
 const secret='test-secret-not-a-real-credential'.repeat(2);
 const id='0325ab19-ff7e-4e87-943a-6d99064b7700';
@@ -14,6 +15,48 @@ test('art generation fails closed, requires same-origin and validated bounded pr
  const handler=createArtHandler({...cfg,fetcher:async()=>{throw new Error('must not reach provider');}});
  assert.equal((await handler(req({requestId:id,prompt:'valid enough prompt',style:'steel'},{origin:'https://attacker.example'}))).status,403);
  for(const body of [{requestId:id,prompt:'short',style:'steel'},{requestId:id,prompt:'A valid artwork prompt',style:'unknown'},{requestId:id,prompt:'x'.repeat(5000),style:'steel'},{requestId:id,prompt:'valid enough prompt',style:'steel',destination:'private'}])assert.equal((await handler(req(body))).status,400);
+});
+test('art origin policy selects one exact production origin and preserves development loopback',()=>{
+ const apex={...cfg};
+ const preview={...cfg,applicationOrigin:'https://preview.qrupgrade.com'};
+ assert.equal(sameOrigin(req({}),apex),true);
+ assert.equal(sameOrigin(req({}),{...cfg,applicationOrigin:'https://qrupgrade.com'}),true);
+ assert.equal(sameOrigin(req({}, {origin:'https://preview.qrupgrade.com'}),apex),false);
+ assert.equal(sameOrigin(req({}, {origin:'https://preview.qrupgrade.com'}),preview),true);
+ assert.equal(sameOrigin(req({}),preview),false);
+ assert.equal(sameOrigin(req({}, {origin:'https://preview.qrupgrade.com','sec-fetch-site':'cross-site'}),preview),false);
+ for(const variant of ['', 'http://preview.qrupgrade.com', 'https://preview.qrupgrade.com:443', 'https://sub.preview.qrupgrade.com', 'https://preview.qrupgrade.com/path']){
+  assert.equal(sameOrigin(req({}, {origin:variant}),preview),false,`request origin ${variant}`);
+  assert.equal(sameOrigin(req({}, {origin:'https://preview.qrupgrade.com'}),{...cfg,applicationOrigin:variant}),false,`configured origin ${variant}`);
+ }
+ for(const origin of ['http://localhost:3017','http://127.0.0.1:3017']){
+  assert.equal(sameOrigin(req({}, {origin}),{production:false}),true);
+  assert.equal(sameOrigin(req({}, {origin}),cfg),false);
+  assert.equal(sameOrigin(req({}, {origin}),{production:false,applicationOrigin:''}),false);
+ }
+});
+test('configured preview reaches the synthetic service only for its exact origin',async()=>{
+ let calls=0;
+ const handler=createArtHandler({...cfg,applicationOrigin:'https://preview.qrupgrade.com',fetcher:async()=>{calls++;return Response.json({id,status:'pending'},{status:202});}});
+ const payload={requestId:id,prompt:'Sculptural glass with steel details',style:'steel'};
+ const accepted=await withWebEntry({},'192.0.2.1',()=>handler(req(payload,{origin:'https://preview.qrupgrade.com'})));
+ assert.equal(accepted.status,202);assert.equal(calls,1);
+ for(const origin of ['https://qrupgrade.com','https://preview.qrupgrade.com:443','https://sub.preview.qrupgrade.com']){
+  assert.equal((await withWebEntry({},'192.0.2.1',()=>handler(req(payload,{origin})))).status,403);
+ }
+ assert.equal(calls,1);
+ const invalid=createArtHandler({...cfg,applicationOrigin:'',fetcher:async()=>{calls++;return Response.json({id},{status:202});}});
+ assert.equal((await withWebEntry({},'192.0.2.1',()=>invalid(req(payload,{origin:'https://preview.qrupgrade.com'})))).status,403);
+ assert.equal(calls,1);
+});
+test('art route reads the preview origin from each request runtime context',async()=>{
+ let calls=0;
+ const binding={fetch:(async()=>{calls++;return Response.json({id,status:'pending'},{status:202});}) as typeof fetch};
+ const payload={requestId:id,prompt:'Sculptural glass with steel details',style:'steel'};
+ const accepted=await withWebEntry({QR_SERVICE:binding,QR_SERVICE_SECRET:secret,QR_ART_ORIGIN:'https://preview.qrupgrade.com'},'192.0.2.1',()=>artRoutePost(req(payload,{origin:'https://preview.qrupgrade.com'})));
+ assert.equal(accepted.status,202);assert.equal(calls,1);
+ const rejected=await withWebEntry({QR_SERVICE:binding,QR_SERVICE_SECRET:secret,QR_ART_ORIGIN:''},'192.0.2.1',()=>artRoutePost(req(payload,{origin:'https://preview.qrupgrade.com'})));
+ assert.equal(rejected.status,403);assert.equal(calls,1);
 });
 test('art proxy gives worker hashed ownership/network, no raw IP or public credential',async()=>{
  let target='',sent:RequestInit|undefined;

@@ -4,12 +4,14 @@ import { createHmac, randomBytes } from 'node:crypto';
 const COOKIE = 'qr-art-session';
 const requestIdPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const headers = { 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff' };
-export type ArtConfig = { url?: string; secret?: string; production: boolean; fetcher?: typeof fetch };
+export type ArtConfig = { url?: string; secret?: string; production: boolean; applicationOrigin?: string; fetcher?: typeof fetch };
 export function sameOrigin(request: Request, config: ArtConfig) {
  const origin=request.headers.get('origin');
- const allowed=new Set(['https://qrupgrade.com']);
- if(!config.production&&origin&&/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin))allowed.add(origin);
- return !!origin&&allowed.has(origin)&&request.headers.get('sec-fetch-site')!=='cross-site';
+ const applicationOrigin=config.applicationOrigin===undefined
+  ?'https://qrupgrade.com'
+  :['https://qrupgrade.com','https://preview.qrupgrade.com'].includes(config.applicationOrigin)?config.applicationOrigin:null;
+ if(!applicationOrigin||!origin||request.headers.get('sec-fetch-site')==='cross-site')return false;
+ return origin===applicationOrigin||(!config.production&&/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin));
 }
 export async function boundedJson(request: Request) {
  if(request.headers.get('content-type')?.split(';')[0]!=='application/json')throw new Error('Use application/json.');
