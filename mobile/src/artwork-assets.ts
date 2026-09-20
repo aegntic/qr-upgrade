@@ -1,0 +1,16 @@
+export const artworkAssets: Record<string, number> = {
+  "alpine": require("../assets/artwork/alpine-source.png"),
+  "astral": require("../assets/artwork/astral-source.png"),
+  "botanical": require("../assets/artwork/botanical-source.png"),
+  "citrus": require("../assets/artwork/citrus-source.png"),
+  "city": require("../assets/artwork/city-source.png"),
+  "coffee": require("../assets/artwork/coffee-source.png"),
+  "dragon": require("../assets/artwork/dragon-source.png"),
+  "fox": require("../assets/artwork/fox-source.png"),
+  "koi": require("../assets/artwork/koi-source.png"),
+  "ocean": require("../assets/artwork/ocean-source.png"),
+  "orchid": require("../assets/artwork/orchid-source.png"),
+  "tiger": require("../assets/artwork/tiger-source.png"),
+  "vinyl": require("../assets/artwork/vinyl-source.png"),
+  "wave": require("../assets/artwork/wave-source.png"),
+};

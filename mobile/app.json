@@ -1,0 +1,62 @@
+{
+  "expo": {
+    "name": "QR Upgrade",
+    "slug": "qr-upgrade",
+    "scheme": "qrupgrade",
+    "version": "0.1.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.qrupgrade.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.qrupgrade.app",
+      "predictiveBackGestureEnabled": true,
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
+      "allowBackup": false,
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/icon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Use your camera to check whether a printed QR code matches your design.",
+          "recordAudioAndroid": false,
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Choose a scene photo to preview your QR code.",
+          "microphonePermission": false,
+          "cameraPermission": "Use your camera to check whether a printed QR code matches your design."
+        }
+      ],
+      "./plugins/withSecurity"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "40816dfb-45bc-4600-b4a7-3a2e5a009be6"
+      }
+    },
+    "owner": "aegntic"
+  }
+}

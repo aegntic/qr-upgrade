@@ -12,3 +12,15 @@ compliance/evidence/
 .dev.vars*
 
 .superpowers/
+
+# Local research, build handoffs and agent settings are not release source.
+research/
+verification.md
+**/.claude/
+**/credentials.json
+**/*.jks
+**/*.p8
+**/*.p12
+**/*.pem
+**/*.key
+**/*.mobileprovision
