@@ -1,0 +1,18 @@
+import {accountConfig,accountReply,accountSameOrigin,getAccount,type AccountConfig} from './account';
+import {readLinkBody,validateTarget} from '../../../workers/qr-service/links.mjs';
+const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+export async function linksProxy(r:Request,id?:string,c:AccountConfig=accountConfig()) {
+ const user=await getAccount(r,c);if(!user)return accountReply({error:'Sign in to manage your links.'},401);
+ if(id&&!UUID.test(id))return accountReply({error:'Link not found.'},404);
+ if(!['GET','POST','PATCH'].includes(r.method)||id&&r.method==='POST'||!id&&r.method==='PATCH')return accountReply({error:'Method not allowed.'},405);
+ let body:string|undefined;
+ if(r.method!=='GET'){if(!accountSameOrigin(r,c))return accountReply({error:'Open your account to update links.'},403);try{body=JSON.stringify(await readLinkBody(r));}catch{return accountReply({error:'Use valid JSON link details smaller than 16 KB.'},400);}}
+ try{const response=await fetch(`${c.serviceUrl!.replace(/\/$/,'')}/links${id?`/${id}`:''}`,{method:r.method,headers:{Authorization:`Bearer ${c.secret}`,'x-qr-user':user.id,'Content-Type':'application/json'},body,signal:AbortSignal.timeout(5000),cache:'no-store'});if(response.status>=500)throw new Error();return accountReply(await response.json(),response.status);}catch{return accountReply({error:'Link storage is temporarily unavailable.'},503);}
+}
+export async function linkRedirect(r:Request,slug:string,c:AccountConfig=accountConfig()) {
+ const headers={'Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff'};
+ const missing=(status=404)=>new Response(r.method==='HEAD'?null:'This link is not available.',{status,headers});
+ if(!/^[A-Za-z0-9_-]{16}$/.test(slug))return missing();
+ if(!c.serviceUrl||!c.secret||c.secret.length<32)return missing(503);
+ try{const response=await fetch(`${c.serviceUrl.replace(/\/$/,'')}/resolve/${slug}`,{headers:{Authorization:`Bearer ${c.secret}`,'x-qr-count':r.method==='HEAD'?'0':'1'},signal:AbortSignal.timeout(5000),cache:'no-store'});if(!response.ok)return missing(response.status>=500?503:404);const data=await response.json();return new Response(null,{status:307,headers:{...headers,Location:validateTarget(data.target)}});}catch{return missing(503);}
+}
