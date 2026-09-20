@@ -4,6 +4,8 @@ import {accountConfig,configured,accountOrigin,accountSameOrigin,accountReply,ac
 import {readAccountBody} from '../../../workers/qr-service/account.mjs';
 import {billingConfig,checkClosureBilling,ClosureBillingBlocked,type BillingConfig,type BillingDeps} from './billing';
 const hash=/^[a-f0-9]{64}$/;
+export const DELETION_CHALLENGE_SECONDS=300;
+export const DELETION_ASSERTION_SKEW_SECONDS=30;
 type Proof={owner:string;version:number;intent:string};
 async function proof(r:Request,c:AccountConfig,purpose:'deletion-intent'|'deletion-status'):Promise<Proof|null>{
  try{const value=readCookie(r,c,purpose);if(!value||value.length>4096)return null;const p=await verifyToken(value,purpose,c);if(!hash.test(String(p.owner))||!hash.test(String(p.intent))||!Number.isSafeInteger(p.version)||Number(p.version)<1)return null;return {owner:String(p.owner),version:Number(p.version),intent:String(p.intent)};}catch{return null;}
@@ -21,18 +23,23 @@ export async function beginDeletion(r:Request,c=accountConfig(),d:AccountDeps={}
   const session=await currentSession(r,c,d);if(!session)return accountReply({error:'Sign in before closing your account.'},401);
   const state=randomBytes(32).toString('base64url'),nonce=randomBytes(32).toString('base64url'),verifier=randomBytes(48).toString('base64url');
   const url=new URL('https://accounts.google.com/o/oauth2/v2/auth');
-  url.search=new URLSearchParams({client_id:c.clientId!,redirect_uri:`${accountOrigin(c)}/api/account/callback`,response_type:'code',scope:'openid email profile',state,nonce,code_challenge:createHash('sha256').update(verifier).digest('base64url'),code_challenge_method:'S256',prompt:'select_account',max_age:'0'}).toString();
+  url.search=new URLSearchParams({client_id:c.clientId!,redirect_uri:`${accountOrigin(c)}/api/account/callback`,response_type:'code',scope:'openid email profile',state,nonce,code_challenge:createHash('sha256').update(verifier).digest('base64url'),code_challenge_method:'S256',prompt:'consent select_account'}).toString();
+  const started=Math.floor(Date.now()/1000),challenge=createHash('sha256').update(state).digest('hex');
+  const reserved=await service(c,d,{owner:session.id,version:session.version,intent:challenge},'challenge',{version:session.version,challenge});
+  if(!reserved.ok||(await reserved.json()).challenge!==challenge)throw new Error('Confirmation unavailable');
   const response=accountReply({url:url.toString()});
-  response.headers.append('Set-Cookie',cookie(c,'oauth',await signAccountToken({state,nonce,verifier,action:'delete',owner:session.id,version:session.version,started:Math.floor(Date.now()/1000)},'oauth',c),600));
+  response.headers.append('Set-Cookie',cookie(c,'oauth',await signAccountToken({state,nonce,verifier,action:'delete',owner:session.id,version:session.version,started,challenge},'oauth',c),600));
   response.headers.append('Set-Cookie',cookie(c,'deletion-intent','',0));return response;
  }catch{return accountReply({error:'Closure verification is temporarily unavailable. Please try again. Your cookies have been retained.'},503);}
 }
 // Called only after the ordinary callback's PKCE exchange, signature, nonce and identity checks.
 export async function finishDeletionVerification(r:Request,c:AccountConfig,d:CallbackDeps,oauth:JWTPayload,google:JWTPayload,owner:string){
  const session=await currentSession(r,c,d),now=Math.floor(Date.now()/1000);
- if(!session||session.id!==owner||oauth.owner!==owner||oauth.version!==session.version||!Number.isSafeInteger(oauth.started)||!Number.isSafeInteger(google.auth_time)||Number(google.auth_time)<Number(oauth.started)-60||Number(google.auth_time)>now+60||Number(google.auth_time)<now-300)throw new Error('Fresh same-account sign-in required');
+ // iat proves assertion issuance only. Google may use an existing authenticated session.
+ const started=Number(oauth.started),issued=Number(google.iat);
+ if(!session||session.id!==owner||oauth.owner!==owner||oauth.version!==session.version||!hash.test(String(oauth.challenge))||!Number.isSafeInteger(oauth.started)||started>now+DELETION_ASSERTION_SKEW_SECONDS||started<now-DELETION_CHALLENGE_SECONDS||!Number.isSafeInteger(google.iat)||issued<started-DELETION_ASSERTION_SKEW_SECONDS||issued>now+DELETION_ASSERTION_SKEW_SECONDS)throw new Error('A new same-account Google confirmation is required');
  const p:Proof={owner,version:session.version,intent:randomBytes(32).toString('hex')};
- const response=await service(c,d,p,'intent',{version:p.version,intent:p.intent});if(!response.ok||(await response.json()).intent!==p.intent)throw new Error('Verification could not be saved');
+ const response=await service(c,d,p,'intent',{version:p.version,intent:p.intent,challenge:oauth.challenge});if(!response.ok||(await response.json()).intent!==p.intent)throw new Error('Verification could not be saved');
  const redirect=new Response(null,{status:303,headers:{Location:`${accountOrigin(c)}/account?closure=confirm`,'Cache-Control':'no-store'}});
  redirect.headers.append('Set-Cookie',cookie(c,'oauth','',0));
  redirect.headers.append('Set-Cookie',cookie(c,'deletion-intent',await signAccountToken(p,'deletion-intent',c),300));
@@ -61,7 +68,7 @@ export async function closeAccount(r:Request,c=accountConfig(),d:AccountDeps&Bil
  try{
   const receipt=await proof(r,c,'deletion-status');if(receipt){const data=await readStatus(c,d,receipt);if(data.accepted)return acceptedResponse(c,data);}
   const p=await proof(r,c,'deletion-intent'),session=p?await currentSession(r,c,d):null;
-  if(!p||!session||session.id!==p.owner||session.version!==p.version)return accountReply({error:'Verify the same Google account again before confirming closure.'},401);
+  if(!p||!session||session.id!==p.owner||session.version!==p.version)return accountReply({error:'Confirm with the same Google account again before submitting closure.'},401);
   const binding=await checkClosureBilling(p.owner,p.version,bc,d);
   const response=await service(c,d,p,'start',{intent:p.intent,version:p.version,binding});
   if(response.status===409)return accountReply({error:'Closure was not accepted. Check Billing and verify your account again; a checkout or account change may be in progress.'},409);

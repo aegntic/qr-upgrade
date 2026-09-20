@@ -26,7 +26,7 @@ function fixture(){
  const env={DB,ASSETS,SERVICE_SECRET:c.secret};
  const deps={fetch:async(input:RequestInfo|URL,init?:RequestInit)=>worker.fetch(new Request(String(input),init),env,{waitUntil(){}})};
  const call=(path:string,method='GET',body?:unknown,user=owner,version=1,headers:Record<string,string>={})=>deps.fetch(c.serviceUrl+path,{method,headers:{Authorization:`Bearer ${c.secret}`,'x-qr-user':user,'x-qr-session-version':String(version),'x-qr-deletion-id':intent,'Content-Type':'application/json',...headers},body:body===undefined?undefined:JSON.stringify(body)});
- const prepare=async()=>assert.equal((await call('/account/deletion/intent','POST',{version:1,intent})).status,200);
+ const prepare=async()=>{const challenge=createHash('sha256').update(crypto.randomUUID()).digest('hex');assert.equal((await call('/account/deletion/challenge','POST',{version:1,challenge})).status,200);assert.equal((await call('/account/deletion/intent','POST',{version:1,intent,challenge})).status,200);};
  const start=async(binding:unknown=null)=>call('/account/deletion/start','POST',{version:1,intent,binding});
  return {sqlite,objects,deleted,queries,DB,ASSETS,env,deps,call,prepare,start};
 }
@@ -41,16 +41,41 @@ function seed(f:ReturnType<typeof fixture>,n:number,user=owner,key=`accounts/${u
  f.sqlite.prepare('INSERT INTO dynamic_links VALUES(?,?,?,?,?,?,?,?,?)').run(id(n),user,String(n).padStart(16,'0'),'Link','https://openai.com','published',0,now,now);
  f.sqlite.prepare('INSERT INTO link_daily_counts VALUES(?,?,?)').run(String(n).padStart(16,'0'),'2026-09-20',1);
 }
-test('explicit same-account Google reauthentication uses PKCE/max_age; ordinary login and identity switch cannot approve deletion',async()=>{
- const f=fixture();try{
- const cookie=await cookies(),begin=await beginDeletion(browser(cookie),c,f.deps);assert.equal(begin.status,200);const url=new URL((await begin.json()).url);assert.equal(url.searchParams.get('max_age'),'0');assert.equal(url.searchParams.get('code_challenge_method'),'S256');
- const oauth=begin.headers.getSetCookie().find(x=>x.startsWith('qr-oauth='))!.split(';')[0],p=await verifyToken(oauth.slice(9),'oauth',c);
- for(const change of [{sub:'other'}, {auth_time:0}, {email_verified:false}, {nonce:'wrong'}]){
-  const r=await callback(new Request(`http://localhost:3040/api/account/callback?state=${p.state}&code=code`,{headers:{cookie:`${cookie}; ${oauth}`}}),c,{fetch:async(input,init)=>String(input).includes('oauth2.googleapis.com')?Response.json({id_token:'fixture'}):f.deps.fetch(input,init),verifyGoogleToken:async()=>({sub:'subject',email:'fixture@example.com',email_verified:true,nonce:p.nonce,auth_time:Math.floor(Date.now()/1000),...change})});
-  assert.match(r.headers.get('location')!,/error=signin/);assert.ok(!r.headers.getSetCookie().some(x=>x.startsWith('qr-deletion-intent=')));assert.equal(f.sqlite.prepare('SELECT count(*) n FROM account_deletion_intents').get()!.n,0);
- }
- const valid=await callback(new Request(`http://localhost:3040/api/account/callback?state=${p.state}&code=code`,{headers:{cookie:`${cookie}; ${oauth}`}}),c,{fetch:async(input,init)=>String(input).includes('oauth2.googleapis.com')?Response.json({id_token:'fixture'}):f.deps.fetch(input,init),verifyGoogleToken:async()=>({sub:'subject',email:'fixture@example.com',email_verified:true,nonce:p.nonce,auth_time:Math.floor(Date.now()/1000)})});
- assert.equal(valid.headers.get('location'),'http://localhost:3040/account?closure=confirm');assert.equal(valid.headers.getSetCookie().filter(x=>x.startsWith('qr-deletion-')).length,2);assert.equal(f.sqlite.prepare('SELECT count(*) n FROM account_deletions').get()!.n,0);
+async function googleChallenge(f:ReturnType<typeof fixture>){
+ const cookie=await cookies(),begin=await beginDeletion(browser(cookie),c,f.deps);assert.equal(begin.status,200);
+ const url=new URL((await begin.json()).url),oauth=begin.headers.getSetCookie().find(x=>x.startsWith('qr-oauth='))!.split(';')[0],p=await verifyToken(oauth.slice(9),'oauth',c);
+ const finish=async(change:Record<string,unknown>={},requestCookie=`${cookie}; ${oauth}`,state=String(p.state))=>callback(new Request(`http://localhost:3040/api/account/callback?state=${state}&code=code`,{headers:{cookie:requestCookie}}),c,{fetch:async(input,init)=>String(input).includes('oauth2.googleapis.com')?Response.json({id_token:'fixture'}):f.deps.fetch(input,init),verifyGoogleToken:async()=>({iss:'https://accounts.google.com',aud:c.clientId,sub:'subject',iat:Math.floor(Date.now()/1000),exp:Math.floor(Date.now()/1000)+3600,email:'fixture@example.com',email_verified:true,nonce:p.nonce,...change})});
+ return {cookie,oauth,p,url,finish};
+}
+test('Google confirmation uses consent/account selection and assertion freshness without requiring auth_time',async()=>{
+ for(const optional of [{},{auth_time:0}]){const f=fixture();try{
+ const q=await googleChallenge(f);assert.equal(q.url.searchParams.get('prompt'),'consent select_account');assert.equal(q.url.searchParams.has('max_age'),false);assert.equal(q.url.searchParams.get('code_challenge_method'),'S256');
+ const valid=await q.finish(optional);assert.equal(valid.headers.get('location'),'http://localhost:3040/account?closure=confirm');assert.equal(valid.headers.getSetCookie().filter(x=>x.startsWith('qr-deletion-')).length,2);assert.equal(f.sqlite.prepare('SELECT count(*) n FROM account_deletions').get()!.n,0);
+ const stored=f.sqlite.prepare('SELECT id FROM account_deletion_intents').get()!.id;
+ const replay=await q.finish(optional);assert.match(replay.headers.get('location')!,/error=signin/);assert.equal(f.sqlite.prepare('SELECT id FROM account_deletion_intents').get()!.id,stored,'replay cannot replace the valid final intent');
+ }finally{f.sqlite.close();}}
+});
+test('Google-issued assertion age/skew, purpose, account, nonce, state, challenge age and generation boundaries',async t=>{
+ const fixed=Math.floor(Date.now()/1000);t.mock.method(Date,'now',()=>fixed*1000);
+ for(const [change,allowed] of [[{iat:fixed-30},true],[{iat:fixed+30},true],[{iat:fixed-31},false],[{iat:fixed+31},false],[{iat:undefined},false],[{iat:String(fixed)},false],[{iat:fixed+0.5},false],[{sub:'other'},false],[{email_verified:false},false],[{nonce:'wrong'},false]] as [Record<string,unknown>,boolean][]){
+ const f=fixture();try{const q=await googleChallenge(f),r=await q.finish(change);assert.match(r.headers.get('location')!,allowed?/closure=confirm/:/error=signin/);assert.equal(f.sqlite.prepare('SELECT count(*) n FROM account_deletion_intents').get()!.n,allowed?1:0);}finally{f.sqlite.close();}}
+ for(const attack of ['state','owner','generation','expired-db','expired-signed','future-start','wrong-purpose','replaced-challenge']){const f=fixture();try{
+ const q=await googleChallenge(f);let cookie=`${q.cookie}; ${q.oauth}`,state=String(q.p.state);
+ if(attack==='state')state='wrong';
+ if(attack==='owner')cookie=`${await cookies(other)}; ${q.oauth}`;
+ if(attack==='generation')await f.call('/account/revoke','POST',{version:1});
+ if(attack==='expired-db')f.sqlite.prepare('UPDATE account_deletion_challenges SET expires_at=0').run();
+ if(attack==='expired-signed'||attack==='future-start')cookie=`${q.cookie}; qr-oauth=${await signAccountToken({...q.p,started:attack==='expired-signed'?fixed-301:fixed+31},'oauth',c)}`;
+ if(attack==='wrong-purpose')cookie=`${q.cookie}; qr-oauth=${await signAccountToken({...q.p},'session',c)}`;
+ if(attack==='replaced-challenge'){await beginDeletion(browser(q.cookie),c,f.deps);assert.equal(f.sqlite.prepare('SELECT count(*) n FROM account_deletion_challenges').get()!.n,1);}
+ const r=await q.finish({},cookie,state);assert.match(r.headers.get('location')!,/error=signin/);assert.equal(f.sqlite.prepare('SELECT count(*) n FROM account_deletion_intents').get()!.n,0,attack);
+ }finally{f.sqlite.close();}}
+});
+test('challenge consumption and intent minting roll back together, and expired per-owner challenges are pruned',async()=>{
+ const f=fixture();try{const q=await googleChallenge(f);
+ f.sqlite.exec("CREATE TRIGGER fail_intent BEFORE INSERT ON account_deletion_intents BEGIN SELECT RAISE(ABORT,'fixture'); END");assert.match((await q.finish()).headers.get('location')!,/error=signin/);assert.equal(f.sqlite.prepare('SELECT consumed FROM account_deletion_challenges').get()!.consumed,0);f.sqlite.exec('DROP TRIGGER fail_intent');
+ assert.match((await q.finish()).headers.get('location')!,/closure=confirm/);assert.equal(f.sqlite.prepare('SELECT consumed FROM account_deletion_challenges').get()!.consumed,1);
+ f.sqlite.prepare('UPDATE account_deletion_challenges SET expires_at=0').run();await cleanupAccounts(f.env);assert.equal(f.sqlite.prepare('SELECT count(*) n FROM account_deletion_challenges').get()!.n,0);
  }finally{f.sqlite.close();}
 });
 test('exact-origin fixed confirmation and owner-bound proof reject CSRF, tampering, account switch and expired/replayed intent',async()=>{
@@ -62,7 +87,7 @@ test('exact-origin fixed confirmation and owner-bound proof reject CSRF, tamperi
  f.sqlite.prepare('UPDATE account_deletion_intents SET expires_at=0').run();assert.equal((await closeAccount(browser(cookie),c,f.deps)).status,409);
  await f.prepare();assert.equal((await closeAccount(browser(cookie),c,f.deps,{account:c,enabled:false})).status,202);
  assert.equal((await closeAccount(browser(cookie),c,f.deps)).status,202);assert.equal(f.sqlite.prepare('SELECT session_version FROM account_security WHERE owner=?').get(owner)!.session_version,2);
- assert.equal((await f.call('/account/sign-in','POST',{})).status,409);assert.equal((await f.call('/account/deletion/intent','POST',{version:2,intent:'d'.repeat(64)})).status,409);
+ assert.equal((await f.call('/account/sign-in','POST',{})).status,409);assert.equal((await f.call('/account/deletion/challenge','POST',{version:2,challenge:'d'.repeat(64)})).status,409);
  }finally{f.sqlite.close();}
 });
 test('response loss recovers through independent status receipt; revocation is immediate and failures retain cookies',async()=>{
@@ -191,5 +216,35 @@ test('pre-customer reservation excludes closure before external create; exact bi
  assert.equal((await f.start({customerId:'cus_owned',mode:'test',revision:0})).status,202);
  assert.equal((await f.call('/billing/customer-start','POST',{mode:'test',token})).status,409);
  assert.throws(()=>f.sqlite.prepare('INSERT INTO billing_customer_creations VALUES(?,?,?,?)').run(owner,'test',token,1),/account closed/);
+ }finally{f.sqlite.close();}
+});
+
+test('manifest and settled-upload cursors pass more than 25 protected keys and revisit them after wraparound',async()=>{
+ const f=fixture();try{
+ const shared=Array.from({length:30},(_,n)=>`accounts/${owner}/a-shared-${String(n).padStart(2,'0')}`);
+ for(const [n,key] of shared.entries()){
+  f.sqlite.prepare('INSERT INTO cloud_designs VALUES(?,?,?,?,?,?,?,?)').run(id(n+1),owner,'Owned',0,now,now,key,1);
+  f.sqlite.prepare('INSERT INTO cloud_designs VALUES(?,?,?,?,?,?,?,?)').run(id(n+101),other,'Foreign',0,now,now,key,1);
+  f.sqlite.prepare('INSERT INTO account_uploads VALUES(?,?,?,?)').run(key,owner,1,'settled');f.objects.set(key,new Uint8Array([1]));
+ }
+ const unique=`accounts/${owner}/z-unique`,journalOnly='content/legacy-journal-z-unique';
+ f.sqlite.prepare('INSERT INTO cloud_designs VALUES(?,?,?,?,?,?,?,?)').run(id(90),owner,'Unique',0,now,now,unique,1);f.objects.set(unique,new Uint8Array([2]));
+ // This legacy attributable journal key is outside the owner prefixes, so only fair enqueue can discover it.
+ f.sqlite.prepare('INSERT INTO account_uploads VALUES(?,?,?,?)').run(journalOnly,owner,1,'settled');f.objects.set(journalOnly,new Uint8Array([3]));
+ await f.prepare();assert.equal((await f.start()).status,202);
+ for(let n=0;n<8;n++){const deletes=f.deleted.length;await cleanupAccounts(f.env);assert.ok(f.deleted.length-deletes<=25);}
+ assert.equal(f.objects.has(unique),false);assert.equal(f.objects.has(journalOnly),false);
+ for(const key of shared){assert.ok(f.objects.has(key));assert.equal(f.deleted.includes(key),false);}
+ assert.equal(f.sqlite.prepare('SELECT count(*) n FROM cloud_designs WHERE owner=?').get(other)!.n,30);assert.equal(f.sqlite.prepare('SELECT count(*) n FROM account_uploads WHERE owner=?').get(owner)!.n,30);assert.equal(f.sqlite.prepare('SELECT complete FROM account_deletions').get()!.complete,0);
+ f.sqlite.prepare('DELETE FROM cloud_designs WHERE owner=? AND r2key=?').run(other,shared[0]);
+ for(let n=0;n<4;n++)await cleanupAccounts(f.env);assert.equal(f.objects.has(shared[0]),false,'wraparound retries a formerly protected key');for(const key of shared.slice(1))assert.ok(f.objects.has(key));
+ for(const sql of f.queries.filter(sql=>sql.startsWith('SELECT r2key FROM account_')))assert.match(sql,/LIMIT 25$/);
+ }finally{f.sqlite.close();}
+});
+
+test('concurrent callback replay mints only one intent; challenge pruning stays bounded',async()=>{
+ const f=fixture();try{const q=await googleChallenge(f),responses=await Promise.all([q.finish(),q.finish()]);assert.equal(responses.filter(r=>r.headers.get('location')?.includes('closure=confirm')).length,1);assert.equal(f.sqlite.prepare('SELECT count(*) n FROM account_deletion_intents').get()!.n,1);
+ for(let n=0;n<101;n++){const user=createHash('sha256').update(`expired-${n}`).digest('hex');f.sqlite.prepare('INSERT INTO account_security(owner,session_version) VALUES(?,1)').run(user);f.sqlite.prepare('INSERT INTO account_deletion_challenges VALUES(?,?,?,?,?)').run(user,user,1,0,0);}
+ await cleanupAccounts(f.env);assert.equal(f.sqlite.prepare('SELECT count(*) n FROM account_deletion_challenges WHERE expires_at=0').get()!.n,1);await cleanupAccounts(f.env);assert.equal(f.sqlite.prepare('SELECT count(*) n FROM account_deletion_challenges WHERE expires_at=0').get()!.n,0);
  }finally{f.sqlite.close();}
 });

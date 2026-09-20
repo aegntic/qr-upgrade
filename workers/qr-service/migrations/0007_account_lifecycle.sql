@@ -45,3 +45,10 @@ CREATE INDEX content_pages_cleanup ON content_pages(owner,id);
 CREATE TABLE billing_customer_creations(owner TEXT PRIMARY KEY,mode TEXT NOT NULL CHECK(mode IN ('test','live')),token TEXT NOT NULL,created_at INTEGER NOT NULL);
 CREATE TRIGGER billing_customer_creations_closed_insert BEFORE INSERT ON billing_customer_creations WHEN EXISTS(SELECT 1 FROM account_security WHERE owner=NEW.owner AND lifecycle='closed') BEGIN SELECT RAISE(ABORT,'account closed'); END;
 CREATE TRIGGER billing_customer_creations_immutable BEFORE UPDATE ON billing_customer_creations BEGIN SELECT RAISE(ABORT,'immutable customer creation'); END;
+
+-- One active confirmation challenge per owner; callbacks consume it transactionally.
+CREATE TABLE account_deletion_challenges(owner TEXT PRIMARY KEY REFERENCES account_security(owner),challenge TEXT NOT NULL UNIQUE,version INTEGER NOT NULL,expires_at INTEGER NOT NULL,consumed INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX account_deletion_challenges_expiry ON account_deletion_challenges(expires_at);
+ALTER TABLE account_deletions ADD COLUMN manifest_cursor TEXT;
+ALTER TABLE account_deletions ADD COLUMN uploads_cursor TEXT;
+CREATE INDEX account_uploads_cleanup ON account_uploads(owner,state,r2key);
