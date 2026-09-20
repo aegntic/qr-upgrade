@@ -7,56 +7,9 @@ import React, {
 } from "react";
 import { Appearance, Content, createMatrix, payload } from "../../shared/qr";
 import { createNativeArtwork } from "./artwork";
-import proofs from "../../src/lib/artwork-proofs.json";
 import { assessPrint, autoFix } from "../../shared/score";
-export type Scene = "packaging" | "poster" | "card";
-type Draft = {
-  artwork: string;
-  artworkUri: string | null;
-  portraitUri: string | null;
-  portraitSize: number;
-  strength: number;
-  content: Content;
-  appearance: Appearance;
-  brand: string;
-  sizeMm: number;
-  distanceCm: number;
-  scene: Scene;
-  photo: string | null;
-  x: number;
-  y: number;
-  rotation: number;
-};
-const initial: Draft = {
-  artwork: "dragon",
-  artworkUri: null,
-  portraitUri: null,
-  portraitSize: 20,
-  strength: proofs.dragon.strength,
-  content: {
-    type: "url",
-    url: "https://qrupgrade.com/",
-    ssid: "",
-    password: "",
-    name: "",
-    email: "",
-    phone: "",
-  },
-  appearance: {
-    foreground: "#193c2f",
-    background: "#ffffff",
-    quietZone: 4,
-    style: "soft",
-  },
-  brand: "Your Brand Here.",
-  sizeMm: 70,
-  distanceCm: 40,
-  scene: "packaging",
-  photo: null,
-  x: 50,
-  y: 52,
-  rotation: 0,
-};
+import { Draft, initialDraft as initial } from "./draft-model";
+export type { Draft, Scene } from "./draft-model";
 function useDraftState() {
   const [draft, setDraft] = useState<Draft>(initial);
   const [verification, setVerification] = useState<{

@@ -49,7 +49,14 @@
           "cameraPermission": "Use your camera to check whether a printed QR code matches your design."
         }
       ],
-      "./plugins/withSecurity"
+      "./plugins/withSecurity",
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": false,
+          "faceIDPermission": false
+        }
+      ]
     ],
     "extra": {
       "router": {},
