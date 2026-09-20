@@ -153,6 +153,37 @@ async function runtimeProof() {
  const emptyArt=await fetch(emptyBase+'/api/art');assert.equal((await emptyArt.json()).enabled,false);
  const emptyAccount=await fetch(emptyBase+'/api/account');assert.equal((await emptyAccount.json()).configured,false);
  for(const [route,method] of [['/api/account/login','GET'],['/api/billing/webhook','POST']]) {const r=await fetch(emptyBase+route,{method,signal:AbortSignal.timeout(10000)});assert.equal(r.status,503);security(r);assert.match(r.headers.get('cache-control'),/no-store/);await r.text();}
+ // Exercise adapter data aliases against the actual generated Worker with a
+ // one-request local bucket. The temporary entry controls only provider metadata
+ // so workerd can also prove the production missing/invalid-header paths.
+ const boundary={...empty,name:'qr-upgrade-web-boundary',main:'boundary-probe.mjs',vars:{},ratelimits:[{...config.ratelimits[0],simple:{limit:1,period:60}}]};
+ await writeFile(path.join(work,'wrangler.boundary.json'),JSON.stringify(boundary));
+ await writeFile(path.join(work,'boundary-probe.mjs'),`import worker from './cloudflare/worker.ts';
+ export default { fetch(request,env,ctx) {
+  const headers=new Headers(request.headers), mode=new URL(request.url).searchParams.get('fixtureMetadata');
+  if(mode==='absent') headers.delete('cf-connecting-ip');
+  else headers.set('cf-connecting-ip',mode==='invalid'?'invalid':'192.0.2.10');
+  return worker.fetch(new Request(request,{headers}),env,ctx);
+ }};`);
+ const probe3=net.createServer();await new Promise(resolve=>probe3.listen(0,'127.0.0.1',resolve));const port3=probe3.address().port;await new Promise(resolve=>probe3.close(resolve));
+ const boundaryLogs=server(['dev','--config','wrangler.boundary.json','--local','--ip','127.0.0.1','--port',String(port3),'--inspector-port','0']);
+ const boundaryBase=`http://127.0.0.1:${port3}`;await ready(boundaryBase,boundaryLogs);
+ const boundaryGet=(route,method='GET')=>fetch(boundaryBase+route,{method,redirect:'manual',signal:AbortSignal.timeout(10000)});
+ const buildId=(await readFile(path.join(work,'.next/BUILD_ID'),'utf8')).trim();
+ const aliases=[`/_next/data/${buildId}/api/art.json`,`/_next/data/${buildId}/api/account.json`,`/_next/data/${buildId}/api/billing/webhook.json`];
+ const allowance=await boundaryGet('/api/art');assert.equal(allowance.status,200);await allowance.text();
+ const exhausted=await boundaryGet('/api/art');assert.equal(exhausted.status,429);await exhausted.text();
+ for(const method of ['GET','POST','HEAD','OPTIONS']) {
+  for(const alias of aliases) {
+   const blocked=await boundaryGet(alias,method);assert.equal(blocked.status,429,method+' data alias after exhaustion');security(blocked);assert.match(blocked.headers.get('cache-control'),/no-store/);await blocked.text();
+   for(const metadata of ['absent','invalid']) {
+    const unverified=await boundaryGet(alias+'?fixtureMetadata='+metadata,method);assert.equal(unverified.status,503,method+' data alias '+metadata+' metadata');security(unverified);assert.match(unverified.headers.get('cache-control'),/no-store/);
+    if(method==='HEAD') await unverified.text();else assert.deepEqual(await unverified.json(),{error:'Request could not be verified.'});
+   }
+  }
+ }
+ const exactWebhook=await boundaryGet('/api/billing/webhook?fixtureMetadata=absent','POST');assert.equal(exactWebhook.status,503);assert.deepEqual(await exactWebhook.json(),{error:'Billing is temporarily unavailable. Please try again.'});
+ console.log('T14 API data alias boundary: exhausted canonical bucket blocks GET/POST/HEAD/OPTIONS aliases; absent/invalid metadata fail closed; only original exact POST webhook dispatches.');
  console.log('T14 actual workerd: nonce, SSR, APIs, metadata, OG, isolated service binding and async signed webhook checks passed.');
  console.log('Local workerd startup output: '+logs().split('\n').filter(line=>/Ready|startup|Total Upload/.test(line)).join('\n'));
 }

@@ -16,7 +16,11 @@ export async function guardRequest(request: Request, env: WebEnvironment, next: 
   let path: string;
   try { path = decodeURIComponent(url.pathname).replace(/\\/g, '/').replace(/\/+/g, '/'); }
   catch { return error(400, 'Invalid request.'); }
-  const api = path.toLowerCase() === '/api' || path.toLowerCase().startsWith('/api/');
+  // OpenNext fixDataPage rewrites /_next/data/<build-id>/<route>.json
+  // before dispatch, for every method. Classify that destination as well; the
+  // exemption below still checks the original pathname, never this alias.
+  const routedPath = path.replace(/^\/_next\/data\/[^/]+(\/.*)\.json$/i, '$1');
+  const api = routedPath.toLowerCase() === '/api' || routedPath.toLowerCase().startsWith('/api/');
   if (api && !(request.method === 'POST' && url.pathname === '/api/billing/webhook')) {
     if (!ip) return error(503, 'Request could not be verified.');
     try {
