@@ -6,11 +6,11 @@ The provisional target is SOC 2 Security and ISO/IEC 27001:2022 readiness, selec
 
 ## Current scope
 
-- Public Next.js site and in-browser QR editor; local Expo mobile draft flow.
+- Public Next.js site and in-browser QR editor; Google account sign-in; owner-scoped Cloudflare D1/R2 cloud designs, dynamic links and explicitly published hosted content; local Expo mobile draft flow.
 - User-entered URLs, network credentials, contact details and selected images are sensitive even when only processed locally.
 - A disabled-by-default server API that performs mathematical print screening. It receives no QR payload or uploaded image.
-- No deployed customer database, user accounts, payment collection, campaign persistence, third-party AI processing or location analytics.
-- Actual hosting, DNS, CI organizations, developer accounts and their access logs are not yet verified. They are not outside the security boundary merely because the editor is local.
+- Cloudflare Workers AI generates artwork from an explicit prompt and style. Payment collection remains disabled pending QR Upgrade-specific Stripe configuration. No visitor location analytics are active.
+- Vercel web hosting, Cloudflare DNS/services, Google OAuth, Expo builds and the private GitHub repository are in scope. Provider access reviews, MFA evidence, log retention and external approvals remain separate evidence requirements. Apple Developer enrollment and device signing are deferred by the owner.
 
 ## Run the checks
 
@@ -26,7 +26,7 @@ SEMGREP_BIN=/tmp/qr-upgrade-security-tools-venv/bin/semgrep GITLEAKS_BIN=/tmp/qr
 npm run compliance:release
 ```
 
-Semgrep downloads public rules from its registry with metrics disabled. The pinned CLI version and used rule IDs are retained with the report; registry rule content can change. This is not an immutable rule-pack claim. Gitleaks scans current files locally; the CI workflow also scans Git history. No source-history scan can be claimed for the current workspace because it has no Git repository.
+Semgrep downloads public rules from its registry with metrics disabled. The pinned CLI version and used rule IDs are retained with the report; registry rule content can change. This is not an immutable rule-pack claim. Gitleaks scans current files locally; the CI workflow also scans Git history. A local Git history scan passed on 20 September 2026 after the verified mobile source was added to the shared repository. Future source changes require fresh checks.
 
 Evidence is written into `compliance/evidence/`, excluded from Git, with owner-only local file permissions. Each run retains command results, hashes and scanner reports. CycloneDX inventories cover **installed npm dependencies on the runner platform**, not a finished CocoaPods/Gradle/native binary inventory. Protect CI evidence artifacts with repository access controls and export audit-period evidence to approved immutable storage; the example CI retention of 30 days is not an audit retention policy.
 
@@ -34,7 +34,7 @@ Evidence is written into `compliance/evidence/`, excluded from Git, with owner-o
 
 ## How release is blocked
 
-There are 13 automated controls and 19 organizational/release controls in `controls.json`.
+There are 14 automated controls and 19 organizational/release controls in `controls.json`.
 
 - Technical evidence must pass, be less than 24 hours old and match a SHA-256 digest of the current first-party source/configuration. Source changes invalidate the report.
 - Every expected check must appear exactly once and carry an evidence artifact whose bytes still match its recorded hash. Missing tools and incomplete reports fail closed.
@@ -42,7 +42,7 @@ There are 13 automated controls and 19 organizational/release controls in `contr
 - The gate exits nonzero when any requirement is absent. It never treats missing evidence as a pass or silently waives a control.
 - Hashes detect change; they do not authenticate the reviewer or make evidence tamper-proof. Private storage access controls, protected CI, reviewer identity, signatures/attestations and branch protection must establish that trust.
 
-The GitHub workflow is supplied but **not installed or verified on a remote repository**. On pull requests/main/daily runs it enforces technical checks and retains reports. Its manual production-readiness job downloads technical evidence from the same workflow run and invokes the actual release gate. It blocks until the organization supplies protected manual evidence retrieval, configures the named environment reviewers, and connects the deployment job. There is no active deployment job or configured production environment in this project. These repository files alone cannot prevent someone with hosting administrator access from deploying outside CI; control G06 requires proving those alternate paths are restricted.
+The GitHub workflow is installed in the private `aegntic/qr-upgrade` repository. Its first remote technical run passed at55cffe6; later code changes still need a fresh run. Mandatory private branch protection was rejected by GitHub with HTTP 403 because the account needs a paid plan; do not treat the workflow alone as enforced branch protection. On pull requests/main/daily runs it enforces technical checks and retains reports. Its manual production-readiness job downloads technical evidence from the same workflow run and invokes the actual release gate. It blocks until the organization supplies protected manual evidence retrieval, establishes independent source/release approval, and connects the deployment job. GitHub Pro supports protected private branches but does not provide private environment required-reviewer gates; the proposed design is documented in `docs/implementation/provider-security.md`. There is no active deployment job or configured production environment in this project. These repository files alone cannot prevent someone with hosting administrator access from deploying outside CI; control G06 requires proving those alternate paths are restricted.
 
 ## Record approved manual evidence
 

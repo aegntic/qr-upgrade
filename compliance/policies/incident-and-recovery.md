@@ -10,6 +10,6 @@ Incident commander, engineering responder, privacy/legal contact, communications
 6. Recover from a trusted build/configuration, validate security controls, monitor for recurrence and approve restoration of service. Document who authorized each decision.
 7. Hold a post-incident review, assign corrective actions with dates and test closure.
 
-For recovery, record actual business RTO/RPO decisions. The current app has no server-side campaign database; test recovery of source, infrastructure configuration, secrets access, DNS and signed release artifacts. If storage is added, require encrypted backups, separate access, retention and a successful restore with integrity checks before launch.
+For recovery, record actual business RTO/RPO decisions. The current service holds cloud-design metadata and snapshots, hosted content/files, feedback messages, dynamic destinations and aggregate counts in D1/private R2. Recover these together with compatible source/configuration. Require protected backups, separate access, retention and a successful restore with integrity checks. The isolated 20 September rehearsal passed 32 runtime checks; it does not prove production cutover, approved recovery targets or an ongoing backup schedule.
 
 Exercise plan: tabletop an exposed service key and a malicious dependency; send a real test alert to the responder; restore/rollback a non-production deployment; record results, timings, failures, corrective actions and independent approval. A successful command build does not substitute for these exercises.
