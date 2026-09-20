@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { payload, type Content } from "../shared/qr";
 import { contentTypeForDestination } from "../src/lib/generator-options";
+import { withWifiEncryption } from "../src/components/destination-fields";
 
 const base: Content = {
   type: "url",
@@ -31,6 +32,14 @@ test("serializes text, coordinates, Wi-Fi and enriched contacts", () => {
   assert.match(card, /ADR:;;1 Main St\\, Sydney;;;;/);
 });
 
+test("preserves legacy Wi-Fi security fallback and omits retained open-network secrets", () => {
+  assert.equal(payload({ ...base, type: "wifi", ssid: "Legacy", password: "secret" }), "WIFI:T:WPA;S:Legacy;P:secret;;");
+  assert.equal(payload({ ...base, type: "wifi", ssid: "Guest", password: "retained-secret", wifiEncryption: "nopass" }), "WIFI:T:nopass;S:Guest;P:;;");
+  const open = withWifiEncryption({ ...base, type: "wifi", ssid: "Guest", password: "secret", wifiEncryption: "WPA" }, "nopass");
+  assert.equal(open.wifiEncryption, "nopass");
+  assert.equal(open.password, "");
+});
+
 test("creates a VEVENT with explicit local dates and timezone", () => {
   const event = payload({ ...base, type: "event", eventTitle: "Launch, night", eventStart: "2026-10-02T18:30", eventEnd: "2026-10-02T20:00", eventTimezone: "Australia/Sydney", eventLocation: "Hall; A", eventDescription: "Doors open" });
   assert.match(event, /^BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT/);
@@ -44,6 +53,9 @@ test("creates a VEVENT with explicit local dates and timezone", () => {
 test("rejects missing required values, injection, invalid bounds and dates", () => {
   assert.throws(() => payload({ ...base, type: "text", text: "" }), /Enter text/);
   assert.throws(() => payload({ ...base, type: "sms", phone: "\nTEL:evil" }), /SMS phone/);
+  assert.throws(() => payload({ ...base, type: "phone", phone: "abc1def" }), /valid phone/);
+  assert.throws(() => payload({ ...base, type: "sms", phone: "+1@example.com" }), /valid SMS/);
+  assert.throws(() => payload({ ...base, type: "whatsapp", phone: "abc123456def" }), /WhatsApp phone/);
   assert.throws(() => payload({ ...base, type: "location", latitude: "91", longitude: "0" }), /Latitude/);
   assert.throws(() => payload({ ...base, type: "location", latitude: "0", longitude: "-181" }), /Longitude/);
   assert.throws(() => payload({ ...base, type: "event", eventTitle: "Test", eventStart: "2026-10-02T20:00", eventEnd: "2026-10-02T18:00" }), /after event start/);

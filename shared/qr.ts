@@ -70,6 +70,7 @@ const safeOptional = (value: string | undefined) => {
   return value?.trim() || "";
 };
 const uri = (value: string) => encodeURIComponent(value);
+const validPhone = (value: string) => /^\+?[\d\s().-]+$/.test(value) && /\d/.test(value);
 const escCalendar = (value: string) => escVcard(value);
 const calendarDate = (value: string, label: string) => {
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
@@ -134,11 +135,11 @@ export function payload(content: Content): string {
     result = requireValue(content.text, "Enter text to encode.");
   } else if (content.type === "phone") {
     const phone = requireValue(content.phone, "Enter a phone number.");
-    if (!/\d/.test(phone)) throw new Error("Enter a valid phone number.");
+    if (!validPhone(phone)) throw new Error("Enter a valid phone number.");
     result = `tel:${uri(phone)}`;
   } else if (content.type === "sms") {
     const phone = requireValue(content.phone, "Enter an SMS phone number.");
-    if (!/\d/.test(phone)) throw new Error("Enter a valid SMS phone number.");
+    if (!validPhone(phone)) throw new Error("Enter a valid SMS phone number.");
     const message = safeOptional(content.smsMessage);
     result = `sms:${uri(phone)}${message ? `?body=${uri(message)}` : ""}`;
   } else if (content.type === "email") {
@@ -153,6 +154,8 @@ export function payload(content: Content): string {
     result = `mailto:${uri(email)}${params.size ? `?${params}` : ""}`;
   } else if (content.type === "whatsapp") {
     const phone = requireValue(content.phone, "Enter a WhatsApp phone number.");
+    if (!validPhone(phone))
+      throw new Error("Enter a WhatsApp phone number with country code.");
     const digits = phone.replace(/[^\d]/g, "");
     if (digits.length < 6 || digits.length > 15)
       throw new Error("Enter a WhatsApp phone number with country code.");
@@ -201,7 +204,8 @@ export function payload(content: Content): string {
       throw new Error("Choose a supported Wi-Fi encryption type.");
     if (encryption !== "nopass" && !content.password)
       throw new Error("Enter the Wi-Fi password.");
-    result = `WIFI:T:${encryption};S:${escWifi(ssid)};P:${escWifi(content.password)};${content.wifiHidden ? "H:true;" : ""};`;
+    const password = encryption === "nopass" ? "" : content.password;
+    result = `WIFI:T:${encryption};S:${escWifi(ssid)};P:${escWifi(password)};${content.wifiHidden ? "H:true;" : ""};`;
   } else {
     if (!content.name.trim()) throw new Error("Enter a contact name.");
     const lines = ["BEGIN:VCARD", "VERSION:3.0", `FN:${escVcard(content.name)}`];

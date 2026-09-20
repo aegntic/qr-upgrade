@@ -37,8 +37,22 @@ export function DestinationFields({ kind, content, onChange }: Props) {
   if (type === "event")
     return <Fields><Field label="Event title" value={content.eventTitle || ""} onChange={(value) => set("eventTitle", value)} /><div className="generator-pair"><Field label="Start date and time" value={content.eventStart || ""} type="datetime-local" onChange={(value) => set("eventStart", value)} /><Field label="End date and time" value={content.eventEnd || ""} type="datetime-local" onChange={(value) => set("eventEnd", value)} /></div><Field label="Timezone (IANA name, optional)" value={content.eventTimezone || ""} placeholder="Australia/Sydney" onChange={(value) => set("eventTimezone", value)} /><Field label="Location (optional)" value={content.eventLocation || ""} onChange={(value) => set("eventLocation", value)} /><Field label="Description (optional)" value={content.eventDescription || ""} onChange={(value) => set("eventDescription", value)} /></Fields>;
   if (type === "wifi")
-    return <Fields><Field label="Network name" value={content.ssid} onChange={(value) => set("ssid", value)} /><label className="generator-field"><span>Security</span><select value={content.wifiEncryption || (content.password ? "WPA" : "nopass")} onChange={(event) => set("wifiEncryption", event.target.value)}><option value="WPA">WPA / WPA2 / WPA3</option><option value="WEP">WEP</option><option value="nopass">No password</option></select></label>{content.wifiEncryption !== "nopass" && <Field label="Wi-Fi password" value={content.password} type="password" onChange={(value) => set("password", value)} />}<label className="generator-field"><input type="checkbox" checked={content.wifiHidden || false} onChange={(event) => set("wifiHidden", event.target.checked)} /> <span>Hidden network</span></label><p className="generator-note">Anyone scanning this QR can read the network credentials.</p></Fields>;
+    return <WifiFields content={content} onChange={onChange} />;
   return <Fields><Field label="Full name" value={content.name} onChange={(value) => set("name", value)} /><div className="generator-pair"><Field label="Email" value={content.email} type="email" onChange={(value) => set("email", value)} /><Field label="Phone" value={content.phone} type="tel" onChange={(value) => set("phone", value)} /></div><Field label="Company (optional)" value={content.company || ""} onChange={(value) => set("company", value)} /><Field label="Job title (optional)" value={content.title || ""} onChange={(value) => set("title", value)} /><Field label="Website (optional)" value={content.website || ""} type="url" onChange={(value) => set("website", value)} /><Field label="Address (optional)" value={content.address || ""} onChange={(value) => set("address", value)} /></Fields>;
+}
+
+function WifiFields({ content, onChange }: { content: Content; onChange: (next: Content) => void }) {
+  const encryption = content.wifiEncryption || (content.password ? "WPA" : "nopass");
+  return <Fields><Field label="Network name" value={content.ssid} onChange={(ssid) => onChange({ ...content, type: "wifi", ssid })} /><label className="generator-field"><span>Security</span><select value={encryption} onChange={(event) => onChange(withWifiEncryption(content, event.target.value as "WPA" | "WEP" | "nopass"))}><option value="WPA">WPA / WPA2 / WPA3</option><option value="WEP">WEP</option><option value="nopass">No password</option></select></label>{encryption !== "nopass" && <Field label="Wi-Fi password" value={content.password} type="password" onChange={(password) => onChange({ ...content, type: "wifi", password })} />}<label className="generator-field"><input type="checkbox" checked={content.wifiHidden || false} onChange={(event) => onChange({ ...content, type: "wifi", wifiHidden: event.target.checked })} /> <span>Hidden network</span></label><p className="generator-note">Anyone scanning this QR can read the network credentials.</p></Fields>;
+}
+
+export function withWifiEncryption(content: Content, wifiEncryption: "WPA" | "WEP" | "nopass"): Content {
+  return {
+    ...content,
+    type: "wifi",
+    wifiEncryption,
+    password: wifiEncryption === "nopass" ? "" : content.password,
+  };
 }
 
 function Fields({ children }: { children: ReactNode }) {
