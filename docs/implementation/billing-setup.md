@@ -1,6 +1,6 @@
-# Stripe billing setup (not activated)
+# Stripe billing and entitlement setup (not activated)
 
-Billing is credential gated and disabled unless `BILLING_ENABLED=true`. No live Stripe resources, charges, merchant identity, or public plan benefits were created by this implementation. Free quotas remain unchanged. The merchant owner must confirm the legal business identity, jurisdiction, settlement account, tax handling, refund/cancellation policy, support details, commercial offers, and quota entitlements before enabling charges. These decisions are pending.
+Billing is credential gated and disabled unless `BILLING_ENABLED=true`. No live Stripe resources, charges, merchant identity, or paid activation were created by this implementation. The code now enforces the reviewed capacity offers: Free includes 50 cloud designs, 50 dynamic links, 50 hosted pages, and 100 uploaded assets; Pro includes 200, 200, 200, and 500; Brand includes 500, 500, 500, and 1,000. Archived records and pending uploads count. File/request limits, retention, public form quotas, and the existing editor, scan, and export behavior are unchanged.
 
 On 20 September 2026 the owner authorized Stripe CLI access to the existing sandbox. A read-only price-list request succeeded. Its existing prices belong to another product; they are not QR Upgrade offers. CLI authorization does not supply the deployed application's secret key or activate checkout. Genuine Google sign-in verification, dedicated QR Upgrade prices, billing server secrets and isolated sandbox storage remain prerequisites for an end-to-end billing test.
 
@@ -9,7 +9,7 @@ On 20 September 2026 the owner authorized Stripe CLI access to the existing sand
 1. Apply `workers/qr-service/migrations/0005_billing.sql` to the intended D1 database. Route `/billing`, `/billing/customer`, `/billing/checkout`, and `/billing/events` through the Worker's existing `SERVICE_SECRET` bearer gate before `billingRequest`.
 2. Configure existing Google account login and `QR_SERVICE_URL` / `QR_SERVICE_SECRET`. The web service secret must match the Worker service secret. Never put Stripe or service secrets in public environment variables.
 3. In a Stripe sandbox, after the merchant confirms the intended offers, create two distinct fixed, positive, per-unit recurring prices. Only licensed monthly or yearly prices are accepted; metered, zero, tiered, inactive, and custom amounts are rejected. Prices must belong to the configured key's mode. Set server-only `STRIPE_PRICE_PRO` and `STRIPE_PRICE_BRAND` to those exact price IDs. The UI gets actual amounts in Stripe minor currency units and does not invent currency or price.
-4. Set server-only `STRIPE_SECRET_KEY` to the sandbox secret key. Configure Stripe Customer Portal for the intended cancellation/payment management features. Review portal product-switch settings separately; this code does not configure or enable switching in the Dashboard.
+4. Set server-only `STRIPE_SECRET_KEY` to an official `sk_test_…` / `sk_live_…` secret key or, preferably for production, a dedicated least-privilege `rk_test_…` / `rk_live_…` restricted application key with the Stripe permissions required by the billing calls documented here. Key prefixes determine mode explicitly; `rk_live_…` is never treated as test. Configure Stripe Customer Portal for the intended cancellation/payment management features. Review portal product-switch settings separately; this code does not configure or enable switching in the Dashboard.
 5. Register `https://qrupgrade.com/api/billing/webhook` with snapshot event types `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, and `checkout.session.completed`. Set `STRIPE_WEBHOOK_SECRET` to that endpoint's signing secret. For isolated local sandbox testing, forward the Stripe CLI to `http://localhost:3040/api/billing/webhook` and use the CLI's separate signing secret. Production and sandbox databases must remain separate because an owner has exactly one mode-specific customer binding.
 6. Only when merchant decisions are approved, test the intended sandbox flows and explicitly set `BILLING_ENABLED=true` in that sandbox. Live activation is a separate owner-authorized operation requiring live prices, key, webhook secret, and reviewed legal/offer configuration. No activation occurred here.
 
@@ -17,7 +17,7 @@ Reference: [Stripe Checkout creation](https://docs.stripe.com/api/checkout/sessi
 
 ## Public API
 
-- `GET /api/billing`: no-store `BillingStatus` from `src/lib/billing-types.ts`. Missing configuration returns 200 with configured=false and no offers/subscription. Provider failure returns 503, never a fabricated free state. `amount` is minor currency units; `currentPeriodEnd` is Unix seconds.
+- `GET /api/billing`: no-store `BillingStatus` from `src/lib/billing-types.ts`. Deliberately disabled billing returns 200 with configured=false, Free entitlement, and no offers/subscription. Enabled but incomplete configuration or provider failure returns 503, never a fabricated Free state. `amount` is minor currency units; `currentPeriodEnd` is Unix seconds.
 - `POST /api/billing/checkout`: exact JSON `{ "tier": "pro" }` or `{ "tier": "brand" }`, authenticated verified Google session and canonical same-origin request. Returns `{url}` on official `checkout.stripe.com`, or `billing.stripe.com` when a blocking subscription already exists.
 - `POST /api/billing/portal`: exact JSON `{}`, same session/origin requirements; no browser-provided customer ID. Returns `{url}` on `billing.stripe.com`.
 - `POST /api/billing/webhook`: raw body, up to 256 KiB within five seconds, SDK signature verification with 300-second tolerance. Checkout/portal JSON is capped at 1 KiB within five seconds.
@@ -27,6 +27,8 @@ Production return URLs are fixed to `https://qrupgrade.com/billing?checkout=retu
 ## Private Worker contract
 
 Every route requires the dispatcher's shared bearer authentication. Owner routes also require `x-qr-user` as a 64-character lowercase hexadecimal account hash.
+
+Capacity-creating requests also receive a server-created `x-qr-plan` header containing only `free`, `pro`, or `brand`. Browser-provided values are discarded by the authenticated web proxies. A missing header retains the Free limits for backward compatibility; any other value fails closed. Workers select numeric limits only from `shared/plan-limits.mjs` and bind them into the existing atomic `INSERT … SELECT` reservations, so concurrent requests cannot exceed a plan boundary.
 
 - `GET /billing` returns `{binding:null|row}`. Row fields: owner, customer_id, mode, reservation, tier, reserved_at, session_id, lease_until.
 - `PUT /billing/customer`, `{customerId,mode}` binds an owner exactly once; identical retries succeed; owner/customer reassignment or mode changes return 409. Customer IDs are unique across owners.
@@ -38,7 +40,9 @@ No email, card, client secret, full event payload, or hosted session URL is stor
 
 ## Reconciliation and failure handling
 
-Each status or checkout request retrieves the Stripe customer and at most 100 fresh subscriptions. Customer metadata owner and mode must match the persisted binding. Overflow and network failures return 503. Active, trialing, past_due, unpaid, incomplete, and paused subscriptions block another checkout and send the user to the portal. Only configured price IDs with quantity one map to a tier; no paid quota increases are implemented.
+Each entitlement, status, or checkout request retrieves validated configured prices, the Stripe customer, and at most 100 fresh subscriptions. Customer metadata owner, key mode, and persisted binding owner/mode must match the requested account. Overflow, ambiguous mapped subscriptions, incomplete enabled configuration, and provider/network failures return 503. Active and trialing mapped subscriptions receive their paid tier, including subscriptions scheduled to cancel at period end until their actual end. Past-due, unpaid, paused, incomplete, incomplete-expired, and canceled subscriptions receive Free capacity. Active, trialing, past_due, unpaid, incomplete, and paused subscriptions still block another checkout and send the user to the portal.
+
+Downgrading below current usage never removes or disables existing work. Reads, exports, edits, pause, archive, and restore remain available; only new designs, links, pages, or uploads are blocked until usage is below the new tier's boundary. Public form quotas and all non-capacity limits remain unchanged.
 
 Webhook delivery order does not influence subscription state. D1 records durable minimal event metadata, including duplicates/out-of-order events safely; current Stripe reads remain authoritative. Failures to persist a recognized event return 503 so Stripe retries.
 

@@ -4,7 +4,8 @@ import Stripe from 'stripe';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import {billingRequest} from '../workers/qr-service/billing.mjs';
-import {billingAction,billingStatus,billingWebhook,billingReady,readBillingBody,type BillingConfig} from '../src/lib/server/billing';
+import {billingAction,billingStatus,billingWebhook,billingReady,readBillingBody,resolveEntitlement,type BillingConfig} from '../src/lib/server/billing';
+import {PLAN_LIMITS} from '../shared/plan-limits.mjs';
 import {signAccountToken} from '../src/lib/server/account';
 const owner='a'.repeat(64),other='b'.repeat(64);
 const c:BillingConfig={enabled:true,key:'sk_test_fixture',webhookSecret:'whsec_fixture',pro:'price_pro',brand:'price_brand',account:{clientId:'test',clientSecret:'test',secret:'s'.repeat(64),serviceUrl:'https://service.example',development:true}};
@@ -12,7 +13,7 @@ function db(){const sqlite=new DatabaseSync(':memory:');sqlite.exec(readFileSync
 function req(path='/billing',method='GET',body?:unknown,user=owner){return new Request('https://service.example'+path,{method,headers:{'x-qr-user':user,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});}
 function fixture(){const env=db();let creates=0;const sessions=new Map<string,any>();const subs:any[]=[];const s={prices:{retrieve:async(id:string)=>({id,active:true,livemode:false,type:'recurring',recurring:{interval:'month',interval_count:1,usage_type:'licensed'},billing_scheme:'per_unit',unit_amount:1200,currency:'usd'})},customers:{create:async()=>({id:'cus_fixture'}),retrieve:async()=>({id:'cus_fixture',livemode:false,metadata:{owner}})},subscriptions:{list:async()=>({data:subs,has_more:false}),retrieve:async(id:string)=>{const sub=subs.find(x=>x.id===id);if(!sub)throw new Error('Not found');return sub;}},checkout:{sessions:{create:async(p:any,o:any)=>{creates++;assert.equal(p.customer,'cus_fixture');assert.equal(p.line_items[0].quantity,1);assert.equal(p.success_url,'http://localhost:3040/billing?checkout=returned');assert.equal(p.cancel_url,'http://localhost:3040/billing?checkout=cancelled');const session=sessions.get(o.idempotencyKey)||{id:`cs_test_fixture${sessions.size}`,customer:'cus_fixture',livemode:false,mode:'subscription',status:'open',url:'https://checkout.stripe.com/c/pay/fixture'};sessions.set(o.idempotencyKey,session);return session;},retrieve:async(id:string)=>[...sessions.values()].find(x=>x.id===id)}},billingPortal:{sessions:{create:async(p:any)=>{assert.equal(p.return_url,'http://localhost:3040/billing');return {url:'https://billing.stripe.com/p/session/fixture'};}}},webhooks:new Stripe('sk_test_fixture').webhooks};const fetcher:typeof fetch=async(input,init)=>billingRequest(new Request(input as string,init),env);return {env,s,subs,sessions,deps:{stripe:s as unknown as Stripe,fetch:fetcher},get creates(){return creates;}};}
 async function browser(body:unknown={tier:'pro'},origin='http://localhost:3040'){const token=await signAccountToken({sub:owner,name:'Fixture',email:'fixture@example.com'},'session',c.account);return new Request('http://localhost:3040/api/billing/checkout',{method:'POST',headers:{origin,cookie:`qr-session=${token}`,'Content-Type':'application/json'},body:JSON.stringify(body)});}
-test('disabled readiness and anonymous offers; bad configured prices and network fail closed',async()=>{const f=fixture();assert.equal(billingReady({...c,brand:c.pro}),false);const off=await billingStatus(req(),{...c,enabled:false},f.deps);assert.deepEqual(await off.json(),{configured:false,signedIn:false,plans:[],subscription:null,canManage:false});const on=await(await billingStatus(req(),c,f.deps)).json();assert.equal(on.plans[0].amount,1200);assert.equal(on.signedIn,false);f.s.prices.retrieve=async()=>{throw new Error('private');};assert.equal((await billingStatus(req(),c,f.deps)).status,503);f.env.sqlite.close();});
+test('disabled readiness and anonymous offers; bad configured prices and network fail closed',async()=>{const f=fixture();assert.equal(billingReady({...c,brand:c.pro}),false);const off=await billingStatus(req(),{...c,enabled:false},f.deps);assert.deepEqual(await off.json(),{configured:false,signedIn:false,plans:[],subscription:null,canManage:false,entitlement:{tier:'free',limits:PLAN_LIMITS.free}});const on=await(await billingStatus(req(),c,f.deps)).json();assert.equal(on.plans[0].amount,1200);assert.equal(on.signedIn,false);f.s.prices.retrieve=async()=>{throw new Error('private');};assert.equal((await billingStatus(req(),c,f.deps)).status,503);f.env.sqlite.close();});
 test('auth, same-origin, exact payload and bounded body gates',async()=>{const f=fixture();assert.equal((await billingAction(req(),'checkout',c,f.deps)).status,401);assert.equal((await billingAction(await browser({},'https://evil.example'),'checkout',c,f.deps)).status,403);for(const b of [{tier:'pro',customer:'cus_other'},{tier:'unknown'},[],null,{tier:'pro',x:'x'.repeat(1100)}])assert.equal((await billingAction(await browser(b),'checkout',c,f.deps)).status,400);assert.equal((await billingAction(await browser({customer:'cus_other'}),'portal',c,f.deps)).status,400);await assert.rejects(()=>readBillingBody(new Request('https://example.com',{method:'POST',body:'x'.repeat(1025)})));f.env.sqlite.close();});
 test('unique immutable customer bindings and cross-owner isolation in real SQLite',async()=>{const env=db();assert.equal((await billingRequest(req('/billing/customer','PUT',{customerId:'cus_fixture',mode:'test'}),env)).status,200);assert.equal((await billingRequest(req('/billing/customer','PUT',{customerId:'cus_other',mode:'test'}),env)).status,409);assert.equal((await billingRequest(req('/billing/customer','PUT',{customerId:'cus_fixture',mode:'test'},other),env)).status,409);assert.equal((await(await billingRequest(req('/billing','GET',undefined,other),env)).json()).binding,null);env.sqlite.close();});
 test('checkout serializes concurrent tiers, reuses open session, and current subscription goes to portal',async()=>{const f=fixture();const responses=await Promise.all([billingAction(await browser(),'checkout',c,f.deps),billingAction(await browser({tier:'brand'}),'checkout',c,f.deps)]);assert.ok(responses.some(r=>r.status===200));assert.equal(f.creates,1);const next=await billingAction(await browser({tier:'brand'}),'checkout',c,f.deps);assert.equal(next.status,200);assert.equal(f.creates,1);f.subs.push({customer:'cus_fixture',livemode:false,status:'past_due',cancel_at_period_end:false,items:{data:[{quantity:1,price:{id:'price_pro'},current_period_end:123}]}});const portal=await(await billingAction(await browser(),'checkout',c,f.deps)).json();assert.match(portal.url,/billing.stripe.com/);const status=await(await billingStatus(await browser(),c,f.deps)).json();assert.equal(status.subscription.status,'past_due');assert.equal(status.canManage,true);f.env.sqlite.close();});
@@ -89,4 +90,49 @@ test('network, 5xx, idempotency and other parameter errors never retire an uncer
    assert.equal(f.env.sqlite.prepare('SELECT reservation FROM billing_customers').get()!.reservation,reservation);assert.equal(f.sessions.size,0);
   }finally{Date.now=originalNow;f.env.sqlite.close();}
  }
+});
+
+test('entitlements use active or trialing mapped subscriptions and retain canceled-period access',async()=>{
+ for(const [status,tier] of [['active','pro'],['trialing','brand']] as const){
+  const f=fixture();await billingRequest(req('/billing/customer','PUT',{customerId:'cus_fixture',mode:'test'}),f.env);
+  f.subs.push({id:`sub_${status}`,customer:'cus_fixture',livemode:false,status,cancel_at_period_end:true,items:{data:[{quantity:1,price:{id:tier==='pro'?'price_pro':'price_brand'},current_period_end:123}]}});
+  assert.deepEqual(await resolveEntitlement(owner,c,f.deps),{tier,limits:PLAN_LIMITS[tier]});
+  const shown=await (await billingStatus(await browser(),c,f.deps)).json();assert.equal(shown.entitlement.tier,tier);assert.equal(shown.subscription.cancelAtPeriodEnd,true);
+  f.env.sqlite.close();
+ }
+});
+
+test('non-paying subscription states receive free limits without losing billing management',async()=>{
+ for(const status of ['past_due','unpaid','paused','incomplete','incomplete_expired','canceled']){
+  const f=fixture();await billingRequest(req('/billing/customer','PUT',{customerId:'cus_fixture',mode:'test'}),f.env);
+  f.subs.push({id:`sub_${status}`,customer:'cus_fixture',livemode:false,status,cancel_at_period_end:false,items:{data:[{quantity:1,price:{id:'price_pro'},current_period_end:123}]}});
+  assert.deepEqual(await resolveEntitlement(owner,c,f.deps),{tier:'free',limits:PLAN_LIMITS.free});f.env.sqlite.close();
+ }
+});
+
+test('entitlement reads fail closed on incomplete setup, owner, customer, mode, price, overflow and provider errors',async()=>{
+ const f=fixture();
+ await assert.rejects(()=>resolveEntitlement(owner,{...c,webhookSecret:undefined},f.deps));
+ const binding={owner:other,customer_id:'cus_fixture',mode:'test' as const,reservation:null,tier:null,reserved_at:null,session_id:null,lease_until:0};
+ await assert.rejects(()=>resolveEntitlement(owner,c,{stripe:f.s as unknown as Stripe,fetch:async()=>Response.json({binding})}));
+ await billingRequest(req('/billing/customer','PUT',{customerId:'cus_fixture',mode:'test'}),f.env);
+ f.s.customers.retrieve=async()=>({id:'cus_fixture',livemode:false,metadata:{owner:other}});await assert.rejects(()=>resolveEntitlement(owner,c,f.deps));
+ f.s.customers.retrieve=async()=>({id:'cus_fixture',livemode:false,metadata:{owner}});
+ const price=f.s.prices.retrieve;f.s.prices.retrieve=async id=>({...await price(id),id:'price_other'});await assert.rejects(()=>resolveEntitlement(owner,c,f.deps));f.s.prices.retrieve=price;
+ f.s.subscriptions.list=async()=>({data:[],has_more:true});await assert.rejects(()=>resolveEntitlement(owner,c,f.deps));
+ f.s.subscriptions.list=async()=>({data:[{customer:'cus_fixture',livemode:false,status:'active',items:{data:[{quantity:2,price:{id:'price_pro'},current_period_end:123}]}}],has_more:false});await assert.rejects(()=>resolveEntitlement(owner,c,f.deps));
+ f.s.subscriptions.list=async()=>({data:[{customer:'cus_fixture',livemode:false,status:'active',items:{data:[],has_more:true}}],has_more:false});await assert.rejects(()=>resolveEntitlement(owner,c,f.deps));
+ f.s.subscriptions.list=async()=>{throw new Error('offline');};await assert.rejects(()=>resolveEntitlement(owner,c,f.deps));f.env.sqlite.close();
+});
+
+test('restricted Stripe keys preserve their explicit test or live mode',async()=>{
+ assert.equal(billingReady({...c,key:'rk_test_fixture'}),true);assert.equal(billingReady({...c,key:'rk_live_fixture'}),true);assert.equal(billingReady({...c,key:'rk_fixture'}),false);
+ const f=fixture(),live={...c,key:'rk_live_fixture'};f.s.prices.retrieve=async id=>({id,active:true,livemode:true,type:'recurring',recurring:{interval:'month',interval_count:1,usage_type:'licensed'},billing_scheme:'per_unit',unit_amount:1200,currency:'usd'});
+ const binding={owner,customer_id:'cus_fixture',mode:'test' as const,reservation:null,tier:null,reserved_at:null,session_id:null,lease_until:0};
+ await assert.rejects(()=>resolveEntitlement(owner,live,{stripe:f.s as unknown as Stripe,fetch:async()=>Response.json({binding})}));f.env.sqlite.close();
+});
+
+test('deliberately disabled billing returns free without provider access',async()=>{
+ const deps={stripe:new Proxy({} as Stripe,{get(){throw new Error('provider accessed');}}),fetch:async()=>{throw new Error('service accessed');}};
+ assert.deepEqual(await resolveEntitlement(owner,{...c,enabled:false,key:undefined,webhookSecret:undefined},deps),{tier:'free',limits:PLAN_LIMITS.free});
 });

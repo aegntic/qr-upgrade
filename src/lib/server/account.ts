@@ -1,11 +1,13 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createRemoteJWKSet, jwtVerify, SignJWT } from 'jose';
+import type {BillingConfig,BillingDeps} from './billing';
 
 const JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'), { timeoutDuration: 5000 });
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 export const MAX_CLOUD_BYTES = 3 * 1024 * 1024;
 export type Account = { id: string; name: string; email: string };
 export type AccountConfig = { clientId?: string; clientSecret?: string; secret?: string; serviceUrl?: string; development: boolean };
+export type EntitlementOptions={config?:BillingConfig;deps?:BillingDeps};
 export function accountConfig(): AccountConfig { return {clientId:process.env.GOOGLE_CLIENT_ID,clientSecret:process.env.GOOGLE_CLIENT_SECRET,secret:process.env.QR_SERVICE_SECRET,serviceUrl:process.env.QR_SERVICE_URL,development:process.env.NODE_ENV==='development'}; }
 export function configured(c=accountConfig()) { return !!(c.clientId&&c.clientSecret&&c.secret&&c.secret.length>=32&&c.serviceUrl); }
 export function accountOrigin(c=accountConfig()) { return c.development?'http://localhost:3040':'https://qrupgrade.com'; }
@@ -53,10 +55,11 @@ export async function boundedCloudBody(r:Request) {
  const timeout=new Promise<never>((_,reject)=>{timer=setTimeout(()=>{reject(new Error('Timed out'));void reader.cancel();},5000);});
  try {while(true){const part=await Promise.race([reader.read(),timeout]);if(part.done)break;size+=part.value.length;if(size>MAX_CLOUD_BYTES){void reader.cancel();throw new Error('Too large');}chunks.push(part.value);}return new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks));}finally{clearTimeout(timer);reader.releaseLock();}
 }
-export async function cloudProxy(r:Request,id?:string,c=accountConfig()) {
+export async function cloudProxy(r:Request,id?:string,c=accountConfig(),entitlementOptions?:EntitlementOptions) {
  const user=await getAccount(r,c);if(!user)return accountReply({error:'Sign in to access your private cloud library.'},401);
  if(id&&!UUID.test(id))return accountReply({error:'Design not found.'},404);
  if(!['GET','POST','PUT','PATCH'].includes(r.method)||(!id&&['PUT','PATCH'].includes(r.method))||(id&&r.method==='POST'))return accountReply({error:'Method not allowed.'},405);
  let body:string|undefined;if(r.method!=='GET'){if(!accountSameOrigin(r,c))return accountReply({error:'Open the studio to update your designs.'},403);try{body=await boundedCloudBody(r);}catch{return accountReply({error:'Use a valid JSON design smaller than 3 MB.'},400);}}
- try {const response=await fetch(`${c.serviceUrl!.replace(/\/$/,'')}/cloud/designs${id?`/${id}`:''}`,{method:r.method,headers:{Authorization:`Bearer ${c.secret}`,'x-qr-user':user.id,'Content-Type':'application/json'},body,signal:AbortSignal.timeout(15000),cache:'no-store'});if(response.status>=500)return accountReply({error:'Cloud storage is temporarily unavailable. Your local designs remain available.'},503);return accountReply(await response.json(),response.status);}catch{return accountReply({error:'Cloud storage is temporarily unavailable. Your local designs remain available.'},503);}
+ try {let plan:string|undefined;if(!id&&r.method==='POST'){const billing=await import('./billing');const config=entitlementOptions?.config||{...billing.billingConfig(),account:c};plan=(await billing.resolveEntitlement(user.id,config,entitlementOptions?.deps)).tier;}
+ const response=await fetch(`${c.serviceUrl!.replace(/\/$/,'')}/cloud/designs${id?`/${id}`:''}`,{method:r.method,headers:{Authorization:`Bearer ${c.secret}`,'x-qr-user':user.id,'Content-Type':'application/json',...(plan?{'x-qr-plan':plan}:{})},body,signal:AbortSignal.timeout(15000),cache:'no-store'});if(response.status>=500)return accountReply({error:'Cloud storage is temporarily unavailable. Your local designs remain available.'},503);return accountReply(await response.json(),response.status);}catch{return accountReply({error:'Cloud storage is temporarily unavailable. Your local designs remain available.'},503);}
 }

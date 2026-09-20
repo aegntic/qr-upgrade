@@ -1,6 +1,7 @@
 import {createHmac} from 'node:crypto';
 import {isIP} from 'node:net';
-import {accountConfig,accountReply,accountSameOrigin,getAccount,type AccountConfig} from './account';
+import {accountConfig,accountReply,accountSameOrigin,getAccount,type AccountConfig,type EntitlementOptions} from './account';
+import {billingConfig,resolveEntitlement} from './billing';
 import {readContentBody} from '../../../workers/qr-service/content.mjs';
 import type {PublicContentPage} from '../content-types';
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -13,19 +14,20 @@ function service(path:string,c:AccountConfig,init:RequestInit={}){
 async function forward(path:string,c:AccountConfig,init:RequestInit={},binary=false){
  try{const result=await service(path,c,init);if(result.status>=500)return unavailable();if(binary&&result.ok){const headers=new Headers({'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Content-Security-Policy':"sandbox; default-src 'none'"});for(const name of ['Content-Type','Content-Disposition','Content-Length'])if(result.headers.has(name))headers.set(name,result.headers.get(name)!);return new Response(result.body,{status:result.status,headers});}return accountReply(await result.json(),result.status);}catch{return unavailable();}
 }
-async function privateProxy(r:Request,path:string,c:AccountConfig,allowed:boolean,limit:number,binary=false){
+async function privateProxy(r:Request,path:string,c:AccountConfig,allowed:boolean,limit:number,binary=false,needsEntitlement=false,entitlementOptions?:EntitlementOptions){
  const user=await getAccount(r,c);if(!user)return accountReply({error:'Sign in to manage your content.'},401);if(!allowed)return accountReply({error:'Method not allowed.'},405);
  let body:string|undefined;if(r.method!=='GET'){if(!accountSameOrigin(r,c))return accountReply({error:'Open your account to update content.'},403);try{body=JSON.stringify(await readContentBody(r,limit));}catch{return accountReply({error:'Use valid JSON within the upload limits.'},400);}}
- return forward(path,c,{method:r.method,headers:{'x-qr-user':user.id,'Content-Type':'application/json'},body},binary);
+ let plan:string|undefined;if(needsEntitlement)try{plan=(await resolveEntitlement(user.id,entitlementOptions?.config||{...billingConfig(),account:c},entitlementOptions?.deps)).tier;}catch{return unavailable();}
+ return forward(path,c,{method:r.method,headers:{'x-qr-user':user.id,'Content-Type':'application/json',...(plan?{'x-qr-plan':plan}:{})},body},binary);
 }
-export async function contentProxy(r:Request,id?:string,c:AccountConfig=accountConfig(),submissions=false){
+export async function contentProxy(r:Request,id?:string,c:AccountConfig=accountConfig(),submissions=false,entitlementOptions?:EntitlementOptions){
  if(id&&!UUID.test(id))return accountReply({error:'Page not found.'},404);
  const allowed=submissions?!!id&&r.method==='GET':id?['GET','PUT','PATCH'].includes(r.method):['GET','POST'].includes(r.method);
- return privateProxy(r,`/content${id?`/${id}`:''}${submissions?'/submissions':''}`,c,allowed,32768);
+ return privateProxy(r,`/content${id?`/${id}`:''}${submissions?'/submissions':''}`,c,allowed,32768,false,!id&&r.method==='POST',entitlementOptions);
 }
-export async function assetProxy(r:Request,id?:string,c:AccountConfig=accountConfig()){
+export async function assetProxy(r:Request,id?:string,c:AccountConfig=accountConfig(),entitlementOptions?:EntitlementOptions){
  if(id&&!UUID.test(id))return accountReply({error:'File not found.'},404);
- return privateProxy(r,`/content-assets${id?`/${id}`:''}`,c,id?r.method==='GET':['GET','POST'].includes(r.method),3145728,!!id);
+ return privateProxy(r,`/content-assets${id?`/${id}`:''}`,c,id?r.method==='GET':['GET','POST'].includes(r.method),3145728,!!id,!id&&r.method==='POST',entitlementOptions);
 }
 export async function getPublicContent(slug:string,c:AccountConfig=accountConfig()):Promise<PublicContentPage|null>{
  if(!SLUG.test(slug))return null;const result=await service(`/public-content/${slug}`,c);if(result.status===404)return null;if(!result.ok)throw new Error('Content is temporarily unavailable.');const data=await result.json();if(!data.page?.content||data.page.slug!==slug)throw new Error('Content is temporarily unavailable.');return data.page;

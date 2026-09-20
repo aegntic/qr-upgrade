@@ -1,3 +1,5 @@
+import {limitsForPlan} from '../../shared/plan-limits.mjs';
+
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const SLUG = /^[A-Za-z0-9_-]{16}$/;
 const reply = (body, status = 200) => Response.json(body, {status, headers:{'Cache-Control':'no-store'}});
@@ -36,15 +38,16 @@ function publicLink(row,counts=[],total) {
 async function withAnalytics(db,row){const since=new Date(Date.now()-29*86400000).toISOString().slice(0,10);const results=await db.batch([db.prepare('SELECT day, count FROM link_daily_counts WHERE slug=? AND day>=? ORDER BY day').bind(row.slug,since),db.prepare('SELECT COALESCE(SUM(count),0) AS total FROM link_daily_counts WHERE slug=?').bind(row.slug)]);return publicLink(row,results[0].results||[],results[1].results?.[0]?.total||0);}
 export async function linksRequest(r,env){
  const owner=r.headers.get('x-qr-user');if(!owner||! /^[a-f0-9]{64}$/.test(owner))return reply({error:'Sign in to manage links.'},401);
+ const limits=limitsForPlan(r.headers.get('x-qr-plan')??'free');if(!limits)return reply({error:'Invalid plan.'},400);
  const path=new URL(r.url).pathname,match=path.match(/^\/links(?:\/([^/]+))?$/),id=match?.[1];if(!match||id&&!UUID.test(id))return reply({error:'Link not found.'},404);
  if(!['GET','POST','PATCH'].includes(r.method)||id&&r.method==='POST'||!id&&r.method==='PATCH')return reply({error:'Method not allowed.'},405);
  let input;if(r.method!=='GET')try{input=validateInput(await readLinkBody(r),r.method==='POST');}catch(e){return reply({error:e.message||'Use valid link details.'},400);}
  try{
-  if(r.method==='GET'&&!id){const rows=await env.DB.prepare('SELECT * FROM dynamic_links WHERE owner=? ORDER BY created_at DESC').bind(owner).all();return reply({links:await Promise.all((rows.results||[]).map(row=>withAnalytics(env.DB,row))),limit:50});}
+  if(r.method==='GET'&&!id){const rows=await env.DB.prepare('SELECT * FROM dynamic_links WHERE owner=? ORDER BY created_at DESC').bind(owner).all();return reply({links:await Promise.all((rows.results||[]).map(row=>withAnalytics(env.DB,row))),limit:limits.dynamicLinks});}
   if(r.method==='POST'){
    const id=crypto.randomUUID(),bytes=crypto.getRandomValues(new Uint8Array(12)),slug=btoa(String.fromCharCode(...bytes)).replace(/\+/g,'-').replace(/\//g,'_'),now=new Date().toISOString();
-   const row=await env.DB.prepare("INSERT INTO dynamic_links (id,owner,slug,name,target,status,archived,created_at,updated_at) SELECT ?,?,?,?,?,'draft',0,?,? WHERE (SELECT COUNT(*) FROM dynamic_links WHERE owner=?) < 50 RETURNING *").bind(id,owner,slug,input.name,input.target,now,now,owner).first();
-   return row?reply({link:publicLink(row)},201):reply({error:'Your account has reached its limit of 50 links.'},409);
+   const row=await env.DB.prepare("INSERT INTO dynamic_links (id,owner,slug,name,target,status,archived,created_at,updated_at) SELECT ?,?,?,?,?,'draft',0,?,? WHERE (SELECT COUNT(*) FROM dynamic_links WHERE owner=?) < ? RETURNING *").bind(id,owner,slug,input.name,input.target,now,now,owner,limits.dynamicLinks).first();
+   return row?reply({link:publicLink(row)},201):reply({error:`Your account has reached its limit of ${limits.dynamicLinks} links.`},409);
   }
   if(r.method==='PATCH'){
    const fields=Object.keys(input),row=await env.DB.prepare(`UPDATE dynamic_links SET ${fields.map(k=>`${k}=?`).join(',')},updated_at=? WHERE id=? AND owner=? RETURNING *`).bind(...fields.map(k=>input[k]),new Date().toISOString(),id,owner).first();

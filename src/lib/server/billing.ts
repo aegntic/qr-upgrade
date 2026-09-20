@@ -1,16 +1,17 @@
 import Stripe from 'stripe';
 import {randomBytes} from 'node:crypto';
 import {accountConfig,configured,accountOrigin,accountSameOrigin,accountReply,getAccount,type AccountConfig} from './account';
-import type {BillingPlan,BillingStatus,BillingTier} from '../billing-types';
+import {PLAN_LIMITS} from '../../../shared/plan-limits.mjs';
+import type {BillingPlan,BillingStatus,BillingTier,Entitlement} from '../billing-types';
 export type BillingConfig={account:AccountConfig;enabled:boolean;key?:string;webhookSecret?:string;pro?:string;brand?:string};
 export function billingConfig():BillingConfig{return {account:accountConfig(),enabled:process.env.BILLING_ENABLED==='true',key:process.env.STRIPE_SECRET_KEY,webhookSecret:process.env.STRIPE_WEBHOOK_SECRET,pro:process.env.STRIPE_PRICE_PRO,brand:process.env.STRIPE_PRICE_BRAND};}
-export function billingReady(c:BillingConfig){return c.enabled&&configured(c.account)&&/^sk_(test|live)_[A-Za-z0-9]+$/.test(c.key||'')&&!!c.webhookSecret&&/^price_[A-Za-z0-9]+$/.test(c.pro||'')&&/^price_[A-Za-z0-9]+$/.test(c.brand||'')&&c.pro!==c.brand;}
+export function billingReady(c:BillingConfig){return c.enabled&&configured(c.account)&&/^(sk|rk)_(test|live)_[A-Za-z0-9]+$/.test(c.key||'')&&!!c.webhookSecret&&/^price_[A-Za-z0-9]+$/.test(c.pro||'')&&/^price_[A-Za-z0-9]+$/.test(c.brand||'')&&c.pro!==c.brand;}
 export type BillingDeps={stripe?:Stripe;fetch?:typeof fetch};
 type Binding={owner:string;customer_id:string;mode:'test'|'live';reservation:string|null;tier:BillingTier|null;reserved_at:number|null;session_id:string|null;lease_until:number};
 const blocked=new Set(['active','trialing','past_due','unpaid','incomplete','paused']);
 const eventTypes=new Set(['customer.subscription.created','customer.subscription.updated','customer.subscription.deleted','checkout.session.completed']);
 const unavailable=()=>accountReply({error:'Billing is temporarily unavailable. Please try again.'},503);
-const mode=(c:BillingConfig)=>c.key!.startsWith('sk_live_')?'live':'test';
+const mode=(c:BillingConfig)=>/^(sk|rk)_live_/.test(c.key!)?'live':'test';
 const id=(v:string|{id:string}|null)=>typeof v==='string'?v:v?.id||null;
 function client(c:BillingConfig,d:BillingDeps){return d.stripe||new Stripe(c.key!,{timeout:10000,maxNetworkRetries:1});}
 export async function readBillingBody(r:Request,limit=1024){
@@ -25,26 +26,45 @@ async function service(c:BillingConfig,d:BillingDeps,path:string,owner?:string,b
 async function plans(s:Stripe,c:BillingConfig):Promise<BillingPlan[]>{
  return Promise.all((['pro','brand'] as const).map(async tier=>{const p=await s.prices.retrieve(c[tier]!);
   if(p.id!==c[tier]||p.livemode!==(mode(c)==='live')||!p.active||p.type!=='recurring'||!p.recurring||!['month','year'].includes(p.recurring.interval)||!Number.isSafeInteger(p.recurring.interval_count)||p.recurring.interval_count<1||p.recurring.usage_type!=='licensed'||p.billing_scheme!=='per_unit'||!Number.isSafeInteger(p.unit_amount)||p.unit_amount!<=0||!/^[a-z]{3}$/.test(p.currency)||p.custom_unit_amount)throw new Error('Invalid price');
-  return {id:tier,name:tier==='pro'?'Pro':'Brand',amount:p.unit_amount!,currency:p.currency,interval:p.recurring.interval as 'month'|'year',intervalCount:p.recurring.interval_count};
+  return {id:tier,name:tier==='pro'?'Pro':'Brand',amount:p.unit_amount!,currency:p.currency,interval:p.recurring.interval as 'month'|'year',intervalCount:p.recurring.interval_count,limits:PLAN_LIMITS[tier]};
  }));
 }
-async function subscriptions(s:Stripe,c:BillingConfig,b:Binding){
+async function subscriptions(s:Stripe,c:BillingConfig,b:Binding,owner=b.owner){
+ if(b.owner!==owner)throw new Error('Owner mismatch');
  if(b.mode!==mode(c))throw new Error('Mode mismatch');
- const customer=await s.customers.retrieve(b.customer_id);if(customer.deleted||customer.livemode!==(mode(c)==='live')||customer.metadata.owner!==b.owner)throw new Error('Customer mismatch');
+ const customer=await s.customers.retrieve(b.customer_id);if(customer.deleted||customer.livemode!==(mode(c)==='live')||customer.metadata.owner!==owner)throw new Error('Customer mismatch');
  const list=await s.subscriptions.list({customer:b.customer_id,status:'all',limit:100});if(list.has_more)throw new Error('Subscription overflow');
  if(list.data.some(x=>id(x.customer)!==b.customer_id||x.livemode!==(mode(c)==='live')))throw new Error('Subscription mismatch');
  const current=list.data.filter(x=>blocked.has(x.status));
+ if(current.some(x=>x.items.has_more||x.items.data.some(item=>[c.pro,c.brand].includes(item.price.id)&&item.quantity!==1)))throw new Error('Subscription item mismatch');
  const mapped=current.flatMap(sub=>sub.items.data.filter(item=>item.quantity===1&&[c.pro,c.brand].includes(item.price.id)).map(item=>({tier:(item.price.id===c.pro?'pro':'brand') as BillingTier,status:sub.status,cancelAtPeriodEnd:sub.cancel_at_period_end,currentPeriodEnd:item.current_period_end})));
  if(mapped.length>1)throw new Error('Ambiguous subscription');
  return {blocked:current.length>0,subscription:mapped[0]||null};
 }
+function entitlement(subscription:Awaited<ReturnType<typeof subscriptions>>['subscription']|null):Entitlement{
+ const tier=subscription&&['active','trialing'].includes(subscription.status)?subscription.tier:'free';
+ return {tier,limits:PLAN_LIMITS[tier]};
+}
+export async function resolveEntitlement(owner:string,c=billingConfig(),d:BillingDeps={}):Promise<Entitlement>{
+ if(!/^[a-f0-9]{64}$/.test(owner))throw new Error('Billing entitlement unavailable');
+ if(!c.enabled)return entitlement(null);
+ if(!billingReady(c))throw new Error('Billing entitlement unavailable');
+ try{
+  const s=client(c,d);await plans(s,c);
+  const b=(await service(c,d,'/billing',owner)).binding;
+  if(!b)return entitlement(null);
+  return entitlement((await subscriptions(s,c,b,owner)).subscription);
+ }catch{throw new Error('Billing entitlement unavailable');}
+}
 function hosted(url:string|null,host:string){if(!url)throw new Error('Missing URL');const u=new URL(url);if(u.protocol!=='https:'||u.hostname!==host||u.port||u.username||u.password)throw new Error('Invalid URL');return url;}
 export async function billingStatus(r:Request,c=billingConfig(),d:BillingDeps={}){
  const user=await getAccount(r,c.account);
- if(!billingReady(c))return accountReply({configured:false,signedIn:!!user,plans:[],subscription:null,canManage:false} satisfies BillingStatus);
+ if(!c.enabled)return accountReply({configured:false,signedIn:!!user,plans:[],subscription:null,canManage:false,entitlement:entitlement(null)} satisfies BillingStatus);
+ if(!billingReady(c))return unavailable();
  try{const s=client(c,d),offers=await plans(s,c);const b=user?(await service(c,d,'/billing',user.id)).binding:null;
- const current=b?await subscriptions(s,c,b):null;
- return accountReply({configured:true,signedIn:!!user,plans:offers,subscription:current?.subscription||null,canManage:!!b} satisfies BillingStatus);
+ if(b&&b.owner!==user?.id)throw new Error('Owner mismatch');
+ const current=b?await subscriptions(s,c,b,user!.id):null;
+ return accountReply({configured:true,signedIn:!!user,plans:offers,subscription:current?.subscription||null,canManage:!!b,entitlement:entitlement(current?.subscription||null)} satisfies BillingStatus);
  }catch{return unavailable();}
 }
 export async function billingAction(r:Request,action:'checkout'|'portal',c=billingConfig(),d:BillingDeps={}){
