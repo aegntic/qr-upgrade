@@ -10,5 +10,13 @@ const config: NextConfig = {
       },
     ];
   },
+  async rewrites() {
+    return [
+      {
+        source: "/opengraph-image",
+        destination: "/opengraph-image.jpg",
+      },
+    ];
+  },
 };
 export default config;
