@@ -67,7 +67,8 @@ export function Footer() {
         <Link href="/account">Your account</Link>
         <Link href="/docs">Methodology</Link>
         <Link href="/ai">Product facts</Link>
-        <Link href="/dynamic">Dynamic links roadmap</Link>
+        <Link href="/links">Dynamic links</Link>
+        <Link href="/content">Hosted content</Link>
         <a href="/llms.txt">llms.txt</a>
       </nav>
     </footer>

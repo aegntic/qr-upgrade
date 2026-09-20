@@ -2,6 +2,7 @@
 
 import type { Content } from "@/lib/qr";
 import type { ReactNode } from "react";
+import Link from "next/link";
 import {
   contentTypeForDestination,
   destinations,
@@ -21,7 +22,7 @@ export function DestinationFields({ kind, content, onChange }: Props) {
     onChange({ ...content, type, [field]: value });
 
   if (type === "url")
-    return <Field label={destination.field} value={content.url} placeholder={destination.placeholder} type="url" onChange={(value) => set("url", value)} />;
+    return <Fields><Field label={destination.field} value={content.url} placeholder={destination.placeholder} type="url" onChange={(value) => set("url", value)} />{['pdf','menu','forms'].includes(kind)?<p className="generator-note">Need a destination? <Link href="/content">Build and host a {kind==='pdf'?'PDF page':kind==='menu'?'menu':'feedback form'} here ↗</Link></p>:kind==='website'?<p className="generator-note">Want to change this destination after printing? <Link href="/links">Create a dynamic link ↗</Link></p>:null}</Fields>;
   if (type === "text")
     return <Field label="Text" value={content.text || ""} placeholder={destination.placeholder} onChange={(value) => set("text", value)} />;
   if (type === "phone")
