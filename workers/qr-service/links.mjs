@@ -11,7 +11,7 @@ export function validateTarget(value) {
   const parts=host.split('.').map(Number),[a,b,c]=parts;const rawHost=raw.split(':')[0];
   if(rawHost!==host||a===0||a===10||a===127||a>=224||a===100&&b>=64&&b<=127||a===169&&b===254||a===172&&b>=16&&b<=31||a===192&&(b===168||b===0||b===2||b===88&&c===99)||a===198&&(b===18||b===19||b===51&&c===100)||a===203&&b===0&&c===113)throw new Error('Use a public HTTPS destination.');
  }
- let path;try{path=decodeURIComponent(u.pathname);}catch{throw new Error('Use a valid destination.');}
+ let path;try{path=decodeURIComponent(u.pathname).replace(/\/{2,}/g,'/');}catch{throw new Error('Use a valid destination.');}
  if((host==='qrupgrade.com'||host.endsWith('.qrupgrade.com'))&&/^\/r(?:\/|$)/i.test(path))throw new Error('A redirect cannot point to another QR Upgrade redirect.');
  return u.href;
 }

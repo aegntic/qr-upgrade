@@ -19,6 +19,13 @@ test('destination validation rejects unsafe literals, obfuscation, loops, creden
  for(const target of ['http://example.com','https://localhost','https://host.local','https://127.0.0.1','https://2130706433','https://0x7f000001','https://0177.0.0.1','https://10.2.3.4','https://192.168.1.1','https://100.64.1.1','https://169.254.169.254','https://[::1]','https://[::ffff:127.0.0.1]','https://[2001:db8::1]','https://a:b@example.com','https://example.com/\nfoo','https://qrupgrade.com/r/anything','https://www.qrupgrade.com/%72/anything'])assert.throws(()=>validateTarget(target),target);
  assert.equal(validateTarget('https://example.com/path?x=1'),'https://example.com/path?x=1');assert.equal(validateTarget('https://8.8.8.8'),'https://8.8.8.8/');assert.equal(validateTarget('https://[2606:4700:4700::1111]'),'https://[2606:4700:4700::1111]/');
 });
+test('local redirect loop check normalizes repeated and encoded slashes',()=>{
+ for(const path of ['//r/aaaaaaaaaaaaaaaa','///r//aaaaaaaaaaaaaaaa','//%72/aaaaaaaaaaaaaaaa','/%2fr/aaaaaaaaaaaaaaaa','/%2F%2Fr%2Faaaaaaaaaaaaaaaa']) {
+  for(const host of ['qrupgrade.com','www.qrupgrade.com'])assert.throws(()=>validateTarget(`https://${host}${path}`),`${host}${path}`);
+ }
+ assert.equal(validateTarget('https://qrupgrade.com//templates'),'https://qrupgrade.com//templates');
+ assert.equal(validateTarget('https://example.com//r/aaaaaaaaaaaaaaaa'),'https://example.com//r/aaaaaaaaaaaaaaaa');
+});
 test('owner-scoped lifecycle, explicit publish, stable slug, atomic counts, pause/archive',async()=>{
  const env=database(),link=await create(env);assert.equal(link.status,'draft');assert.match(link.slug,/^[A-Za-z0-9_-]{16}$/);
  assert.equal((await resolveLink(resolve(link.slug),env)).status,404);
