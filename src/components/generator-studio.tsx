@@ -312,7 +312,10 @@ export default function GeneratorStudio({
   );
 
   const draft = useMemo<EditorDraft>(() => ({
-    version: 1, cloudId, kind, content, mode, appearance, template, art, brandStudy, studyActive,
+    version: 1, cloudId, kind, content, mode, appearance: {
+      foreground: appearance.foreground, background: appearance.background,
+      quietZone: appearance.quietZone, style: appearance.style,
+    }, template, art, brandStudy, studyActive,
     customImage, logo, logoSize, logoFrame, strength, sizeMm, showUtm, utm, adjustments, caption, name,
     destinationDrafts: { ...destinationDrafts.current },
   }), [cloudId, kind, content, mode, appearance, template, art, brandStudy, studyActive, customImage, logo, logoSize, logoFrame, strength, sizeMm, showUtm, utm, adjustments, caption, name]);
