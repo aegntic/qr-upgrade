@@ -1,0 +1,114 @@
+[
+  {
+    "id": "linkedin",
+    "name": "LinkedIn",
+    "destination": "https://www.linkedin.com/",
+    "use": "Profile & networking",
+    "category": "Professional",
+    "subject": "A premium isometric architectural sculpture of an interconnected professional city, crystalline cobalt-blue glass towers, polished steel bridges and luminous porcelain plazas. The recognisable LinkedIn white 'in' monogram is formed organically by two building masses and a square blue plaza, integrated into the scene rather than a pasted badge. Crisp cobalt #0A66C2, deep navy and pearl white."
+  },
+  {
+    "id": "amazon",
+    "name": "Amazon",
+    "destination": "https://www.amazon.com/",
+    "use": "Product, storefront & wishlist",
+    "category": "Shopping",
+    "subject": "An extraordinary miniature world of warm kraft cardboard parcels and folded-paper architecture with flowing glossy orange delivery ribbons. A recognisable Amazon curved smile-arrow sweeps naturally through the lower middle as a sculptural orange ribbon, alongside a small lowercase black 'a' worked into packaging. Cardboard folds and their navy shadows become the QR geometry. Orange #FF9900, espresso-black, tan kraft and warm ivory."
+  },
+  {
+    "id": "snapchat",
+    "name": "Snapchat",
+    "destination": "https://www.snapchat.com/",
+    "use": "Profile & friend sharing",
+    "category": "Social",
+    "subject": "An expressive playful sculptural composition with one large recognisable white Snapchat ghost silhouette emerging from glossy lemon-yellow liquid, surrounded by black lacquer, yellow bubbles and white folded forms. Ghost silhouette clear, not a character with a face. Yellow #FFFC00, deep black and crisp white. The ghost, liquid channels and shadows collectively form the QR image, bold and tactile."
+  },
+  {
+    "id": "instagram",
+    "name": "Instagram",
+    "destination": "https://www.instagram.com/",
+    "use": "Profile, portfolio & reel",
+    "category": "Social",
+    "subject": "A luxurious folded iridescent silk and optical-glass composition in Instagram sunset magenta, violet, coral and warm orange. The recognisable rounded-square camera glyph grows from a continuous luminous sculptural ribbon near the center; camera ring and small lens dot easy to recognise. Deep plum folds and pearl highlights become the QR pattern, expressive editorial visual art."
+  },
+  {
+    "id": "tiktok",
+    "name": "TikTok",
+    "destination": "https://www.tiktok.com/",
+    "use": "Creator profile & video",
+    "category": "Social",
+    "subject": "An energetic high-end audio sculpture, flowing cyan and coral-red sound ribbons with glossy obsidian edges and pale porcelain negative space. A recognisable TikTok musical-note emblem is woven through the center in black, cyan and coral, motion suggested through sculptural curves. The winding ribbons, shadows and luminous spaces themselves form QR structure."
+  },
+  {
+    "id": "youtube",
+    "name": "YouTube",
+    "destination": "https://www.youtube.com/",
+    "use": "Channel, video & subscription",
+    "category": "Social",
+    "subject": "A cinematic miniature sculpture of rich red folded film ribbons, a red rounded-rectangle form and luminous triangular play opening at the center. Recognisable YouTube play-button identity integrated into the folds, with rich crimson, black film-edge details and creamy white spaces. The film strips curl into the QR pattern; premium tactile paper/metal finish."
+  },
+  {
+    "id": "spotify",
+    "name": "Spotify",
+    "destination": "https://open.spotify.com/",
+    "use": "Playlist, artist & album",
+    "category": "Music",
+    "subject": "An exquisite top-down sculptural music landscape: flowing black vinyl grooves, emerald-green acoustic waves and white porcelain channels. Three recognisable curved Spotify sound-wave arcs become the main architectural motif, naturally joined to the grooves. Spotify green #1DB954, deep charcoal and pearl white; elegant music-editorial illustration, no equalizer barcode."
+  },
+  {
+    "id": "whatsapp",
+    "name": "WhatsApp",
+    "destination": "https://www.whatsapp.com/",
+    "use": "Chat & business contact",
+    "category": "Messaging",
+    "subject": "A flowing composition of polished emerald-green ceramic conversation bubbles joined by luminous white channels. A recognisable white telephone handset within a green speech-bubble shape is formed from the main sculptural material, not an overlaid sticker. Leaf-green #25D366, dark forest shadows, white porcelain; welcoming personal conversation embodied as a premium physical sculpture."
+  },
+  {
+    "id": "discord",
+    "name": "Discord",
+    "destination": "https://discord.com/",
+    "use": "Community & invite",
+    "category": "Messaging",
+    "subject": "A playful futuristic floating community plaza, soft lavender architectural blocks, violet shadows, luminous porcelain bridges and a sculptural Discord game-controller/face silhouette with two circular eyes and curved lower edge at the center. Recognisable blurple identity, elegant high-end collectible-toy finish with careful specular details. The buildings and pathways weave into the QR data."
+  },
+  {
+    "id": "telegram",
+    "name": "Telegram",
+    "destination": "https://telegram.org/",
+    "use": "Profile, channel & group",
+    "category": "Messaging",
+    "subject": "An elegant origami landscape of crisp sky-blue and deep-ocean folded paper planes gliding through white cloud-like paper channels. One large recognisable Telegram white paper-plane silhouette rises from the central azure folds. Precisely folded geometry, glossy edge highlights, airy light; the planes, paper folds and shadows become the QR image."
+  },
+  {
+    "id": "pinterest",
+    "name": "Pinterest",
+    "destination": "https://www.pinterest.com/",
+    "use": "Board, inspiration & profile",
+    "category": "Social",
+    "subject": "An editorial art composition of sculptural scarlet ribbon, beautiful ivory paper folds and tiny crimson collage surfaces. The recognisable Pinterest script P/pin shape emerges naturally from a central continuous red ribbon. Rich red #E60023, burgundy depth and creamy-white clear spaces. Artful moodboard materials and ribbon curves form QR geometry."
+  },
+  {
+    "id": "x",
+    "name": "X",
+    "destination": "https://x.com/",
+    "use": "Profile & post",
+    "category": "Social",
+    "subject": "A striking monochrome sculpture of two crossing brushed-titanium ribbons forming a recognisable sharp X, surrounded by black obsidian folds and white porcelain gaps. Directional studio lighting, subtle machined-metal texture, premium restrained finish. The crossing ribbons and a woven metal landscape themselves carry the QR pattern; charcoal, silver, black and pearl."
+  },
+  {
+    "id": "maps",
+    "name": "Google Maps",
+    "destination": "https://maps.google.com/",
+    "use": "Place, directions & business",
+    "category": "Places",
+    "subject": "An exquisite isometric miniature city map, white streets, forest-green parks, bright blue waterways, warm yellow blocks and red-roof buildings. A recognisable multicolour Google Maps location-pin sculpture rises centrally from the map: blue, red, yellow and green segments. The actual streets, buildings, parks and their deep shadows form the QR structure, clear and welcoming."
+  },
+  {
+    "id": "facebook",
+    "name": "Facebook",
+    "destination": "https://www.facebook.com/",
+    "use": "Page, group & event",
+    "category": "Social",
+    "subject": "A luminous interconnected sculpture of cobalt-blue glass arches and white porcelain community plazas, with a recognisable lowercase white Facebook f integrated into a central continuous blue architectural ribbon. Friendly rounded architecture, soft clear daylight, blue #0866FF, deep navy, white and silver. Connected paths and structures form the QR pattern."
+  }
+]

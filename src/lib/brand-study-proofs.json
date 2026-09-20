@@ -1,0 +1,142 @@
+{
+  "linkedin": {
+    "strength": 0.025,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://www.linkedin.com/"
+  },
+  "amazon": {
+    "strength": 0.025,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://www.amazon.com/"
+  },
+  "snapchat": {
+    "strength": 0,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://www.snapchat.com/"
+  },
+  "instagram": {
+    "strength": 0,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://www.instagram.com/"
+  },
+  "tiktok": {
+    "strength": 0,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://www.tiktok.com/"
+  },
+  "youtube": {
+    "strength": 0,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://www.youtube.com/"
+  },
+  "spotify": {
+    "strength": 0,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://open.spotify.com/"
+  },
+  "whatsapp": {
+    "strength": 0.075,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://www.whatsapp.com/"
+  },
+  "discord": {
+    "strength": 0,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://discord.com/"
+  },
+  "telegram": {
+    "strength": 0.025,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://telegram.org/"
+  },
+  "pinterest": {
+    "strength": 0,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://www.pinterest.com/"
+  },
+  "x": {
+    "strength": 0,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://x.com/"
+  },
+  "maps": {
+    "strength": 0.025,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://maps.google.com/"
+  },
+  "facebook": {
+    "strength": 0,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://www.facebook.com/"
+  }
+}

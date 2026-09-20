@@ -1,0 +1,8 @@
+# Replace these commented examples with real GitHub users/teams and save as CODEOWNERS.
+# Require code-owner review in branch protection. This example is not enforcement.
+# * @your-org/engineering
+# /src/lib/security/ @your-org/security
+# /scripts/security/ @your-org/security
+# /compliance/ @your-org/security
+# /.github/ @your-org/security
+# /mobile/plugins/ @your-org/mobile-security

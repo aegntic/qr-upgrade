@@ -1,0 +1,9 @@
+node_modules/
+.next/
+.env*
+!.env.example
+*.tsbuildinfo
+
+# Internal evidence can contain audit details; use protected artifact storage.
+compliance/evidence/
+.vercel

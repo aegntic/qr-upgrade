@@ -1,0 +1,18 @@
+# Deploy only the web application and its assets.
+node_modules/
+.next/
+.git/
+.env*
+!.env.example
+mobile/
+research/
+compliance/
+tests/
+scripts/
+.github/
+.impeccable/
+*.log
+*.tsbuildinfo
+README.md
+DESIGN.md
+PRODUCT.md

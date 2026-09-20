@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "controls": [],
+  "instructions": "Copy to compliance/evidence/manual.json. Add approved control records only after a real review. See compliance/README.md for the record schema. Empty evidence intentionally blocks production."
+}

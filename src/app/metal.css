@@ -1,0 +1,176 @@
+:root {
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --metal-grain: repeating-linear-gradient(
+    0deg,
+    #ffffff00 0 1px,
+    #ffffff06 1px 2px
+  );
+  --metal-silver: linear-gradient(
+    170deg,
+    #eef1f5 0%,
+    #b1b7c0 45%,
+    #e1e5eb 51%,
+    #a3aab4 100%
+  );
+  --metal-dark: linear-gradient(
+    170deg,
+    #343840,
+    #191c22 48%,
+    #252931 51%,
+    #16191f
+  );
+}
+body button,
+body a.primary-button,
+body a.nav-cta,
+body a.steel-button,
+body a.foundation-cta {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid #ffffff29;
+  border-radius: 8px;
+  background: var(--metal-grain), var(--metal-dark);
+  color: #e9edf4;
+  text-shadow: 0 1px 2px #0008;
+  min-height: 36px;
+  box-shadow:
+    inset 0 1px 0 #ffffff16,
+    inset 0 -1px 0 #0009,
+    0 3px 5px #0005;
+  transition:
+    transform 300ms var(--ease-out),
+    box-shadow 300ms,
+    border-color 240ms,
+    color 240ms;
+}
+body button::before,
+body a.primary-button::before,
+body a.nav-cta::before,
+body a.steel-button::before,
+body a.foundation-cta::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  inset: -30% -60%;
+  pointer-events: none;
+  background: linear-gradient(
+    110deg,
+    transparent 40%,
+    #ffffff05 45%,
+    #ffffff26 50%,
+    #ffffff05 55%,
+    transparent 60%
+  );
+  transform: translateX(-65%);
+  opacity: 0;
+  transition:
+    transform 800ms var(--ease-out),
+    opacity 300ms;
+}
+body button::after,
+body a.primary-button::after,
+body a.nav-cta::after,
+body a.steel-button::after,
+body a.foundation-cta::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 1px 0 #f0f5ff90,
+    inset 1px 0 0 #ffffff24,
+    inset -1px 0 0 #ffffff24;
+  opacity: 0;
+  transition: opacity 260ms;
+}
+body a.steel-button,
+body a.nav-cta,
+body a.primary-button,
+body a.foundation-cta,
+body button.generator-download {
+  background: var(--metal-grain), var(--metal-silver);
+  color: #15171c;
+  border-color: #d6dae0;
+  text-shadow: 0 1px 0 #ffffff90;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 #707680,
+    0 5px 12px #0006;
+}
+@media (hover: hover) {
+  body button:not(:disabled):hover::before,
+  body a.primary-button:hover::before,
+  body a.nav-cta:hover::before,
+  body a.steel-button:hover::before,
+  body a.foundation-cta:hover::before {
+    transform: translateX(65%);
+    opacity: 1;
+  }
+  body button:not(:disabled):hover::after,
+  body a.primary-button:hover::after,
+  body a.nav-cta:hover::after,
+  body a.steel-button:hover::after,
+  body a.foundation-cta:hover::after {
+    opacity: 1;
+  }
+  body a.steel-button:hover,
+  body a.nav-cta:hover,
+  body button.generator-download:not(:disabled):hover {
+    box-shadow:
+      inset 0 1px 0 #fff,
+      inset 0 -2px 0 #707680,
+      0 7px 24px #a9b4c828;
+    transform: translateY(-1px);
+  }
+}
+body button:active:not(:disabled),
+body a.steel-button:active,
+body a.primary-button:active,
+body a.nav-cta:active,
+body a.foundation-cta:active {
+  transform: translateY(2px) scale(0.987);
+  transition-duration: 85ms;
+  box-shadow:
+    inset 0 2px 4px #0006,
+    inset 0 -1px 0 #ffffff20,
+    0 1px 2px #0005;
+}
+body input[type="range"] {
+  appearance: none;
+  background: transparent;
+  height: 32px;
+  accent-color: #c9cfd9;
+}
+body input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 4px;
+  background: #464c57;
+  box-shadow: inset 0 1px 3px #000;
+}
+body input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 26px;
+  margin-top: -11px;
+  border-radius: 5px;
+  border: 1px solid #d0d6de;
+  background: var(--metal-grain), var(--metal-silver);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 3px 6px #0009;
+}
+body input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 4px;
+  background: #464c57;
+}
+body input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 24px;
+  border-radius: 5px;
+  border: 1px solid #d0d6de;
+  background: var(--metal-silver);
+}

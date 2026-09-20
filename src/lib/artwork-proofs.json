@@ -1,0 +1,142 @@
+{
+  "dragon": {
+    "strength": 0.05,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://qrupgrade.com/"
+  },
+  "koi": {
+    "strength": 0.05,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://qrupgrade.com/"
+  },
+  "coffee": {
+    "strength": 0,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://qrupgrade.com/"
+  },
+  "alpine": {
+    "strength": 0,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://qrupgrade.com/"
+  },
+  "tiger": {
+    "strength": 0.05,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://qrupgrade.com/"
+  },
+  "orchid": {
+    "strength": 0.05,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://qrupgrade.com/"
+  },
+  "city": {
+    "strength": 0.05,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://qrupgrade.com/"
+  },
+  "ocean": {
+    "strength": 0.2,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://qrupgrade.com/"
+  },
+  "citrus": {
+    "strength": 0,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://qrupgrade.com/"
+  },
+  "astral": {
+    "strength": 0.05,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://qrupgrade.com/"
+  },
+  "vinyl": {
+    "strength": 0,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://qrupgrade.com/"
+  },
+  "fox": {
+    "strength": 0.05,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://qrupgrade.com/"
+  },
+  "wave": {
+    "strength": 0.05,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://qrupgrade.com/"
+  },
+  "botanical": {
+    "strength": 0.05,
+    "verifiedWidths": [
+      184,
+      256,
+      512,
+      768
+    ],
+    "destination": "https://qrupgrade.com/"
+  }
+}

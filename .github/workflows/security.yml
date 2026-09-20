@@ -1,0 +1,92 @@
+name: Enterprise security gates
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * *'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  technical-gate:
+    name: technical-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      EXPO_NO_TELEMETRY: '1'
+      SEMGREP_SEND_METRICS: 'off'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            mobile/package-lock.json
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Install locked app dependencies
+        run: |
+          npm ci
+          npm ci --prefix mobile
+      - name: Install pinned scanners
+        run: |
+          python -m pip install -r scripts/security/requirements.txt
+          python scripts/security/install-tools.py "$RUNNER_TEMP/qr-upgrade-tools"
+          echo "$RUNNER_TEMP/qr-upgrade-tools" >> "$GITHUB_PATH"
+      - name: Scan commit history for secrets
+        run: gitleaks git --redact=100 --no-banner --config .gitleaks.toml .
+      - name: Collect and enforce technical evidence
+        run: npm run security:evidence
+      - name: Retain private evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: security-evidence-${{ github.sha }}
+          path: compliance/evidence/
+          retention-days: 30
+          if-no-files-found: error
+  production-readiness:
+    name: production-readiness
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: technical-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production-security-review
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: security-evidence-${{ github.sha }}
+          path: compliance/evidence/
+      # Add reviewed retrieval from the organization's protected evidence store here.
+      # It must verify provenance before writing manual.json and referenced artifacts.
+      # Without those approvals the real gate below fails closed.
+      - name: Enforce release evidence
+        run: npm run compliance:release
+      - name: Retain readiness decision
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: release-readiness-${{ github.sha }}
+          path: |
+            compliance/evidence/release-readiness.json
+            compliance/evidence/readiness.html
+          retention-days: 30
+          if-no-files-found: error

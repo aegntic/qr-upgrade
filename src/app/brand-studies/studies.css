@@ -1,0 +1,175 @@
+.brand-studies-page {
+  max-width: 1260px;
+  padding: 55px 36px 80px;
+  margin: 0 auto;
+}
+.brand-study-intro {
+  max-width: 880px;
+  margin-bottom: 40px;
+}
+.brand-study-intro h1 {
+  font-size: clamp(36px, 5vw, 64px);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.055em;
+  margin: 18px 0 23px;
+}
+.brand-study-intro h1 span {
+  color: #a9b6cb;
+}
+.brand-study-intro > p {
+  font-size: 18px;
+  line-height: 1.65;
+  color: #abb6c7;
+  max-width: 650px;
+}
+.brand-study-note {
+  border-left: 2px solid #aab9d0;
+  padding: 4px 0 4px 16px;
+  max-width: 730px;
+  margin-top: 24px;
+  font-size: 12px;
+  line-height: 1.8;
+  color: #aab6c8;
+}
+.brand-study-note strong {
+  color: #edf2f9;
+}
+.brand-study-filter {
+  display: flex;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.brand-study-filter button {
+  padding: 10px 14px;
+  font-size: 12px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.brand-study-filter button span {
+  opacity: 0.6;
+  font-size: 10px;
+}
+body .brand-study-filter button[aria-pressed="true"] {
+  background: var(--metal-grain), var(--metal-dark);
+  color: #edf2f9;
+  border-color: #b3c1d6;
+  box-shadow:
+    inset 0 2px 4px #000a,
+    0 1px 0 #ffffff29;
+}
+.brand-study-count {
+  font-size: 11px;
+  color: #a9b6c8;
+  margin: 19px 0 24px;
+}
+.brand-study-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+.brand-study-card {
+  background: #11161f;
+  border: 1px solid #ffffff26;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.brand-study-art {
+  display: block;
+  background: #fff;
+  border-bottom: 1px solid #ffffff20;
+}
+.brand-study-art img {
+  width: 100%;
+  height: auto;
+  display: block;
+  aspect-ratio: 1;
+}
+.brand-study-copy {
+  padding: 20px;
+}
+.brand-study-copy .section-kicker {
+  font-size: 9px;
+  letter-spacing: 1.8px;
+}
+.brand-study-copy h2 {
+  font-size: 25px;
+  letter-spacing: -0.8px;
+  font-weight: 550;
+  margin: 7px 0 5px;
+}
+.brand-study-copy > p {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #b3bdcd;
+  margin: 0 0 18px;
+}
+.brand-study-verified {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 10px;
+  color: #c7d5e9;
+}
+.brand-study-copy > .brand-study-destination {
+  font-size: 10px;
+  color: #a9b6c8;
+  margin: 7px 0 21px;
+  overflow-wrap: anywhere;
+}
+.brand-study-destination a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.brand-study-actions {
+  display: flex;
+  gap: 13px;
+  align-items: center;
+  justify-content: space-between;
+}
+.brand-study-actions .nav-cta {
+  padding: 10px 12px;
+  font-size: 11px;
+  gap: 9px;
+  min-height: 42px;
+}
+.brand-study-actions > a:last-child {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  min-height: 42px;
+  color: #c4d1e3;
+}
+.brand-study-footer {
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid #ffffff26;
+  color: #a9b6c8;
+  font-size: 12px;
+  line-height: 1.8;
+}
+@media (max-width: 1000px) {
+  .brand-study-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
+}
+@media (max-width: 580px) {
+  .brand-studies-page {
+    padding: 35px 20px 55px;
+  }
+  .brand-study-grid {
+    grid-template-columns: 1fr;
+  }
+  .brand-study-intro > p {
+    font-size: 16px;
+  }
+  .brand-study-filter {
+    gap: 7px;
+  }
+  .brand-study-filter button {
+    padding: 9px 12px;
+  }
+}

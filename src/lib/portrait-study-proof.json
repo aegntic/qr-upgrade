@@ -1,0 +1,12 @@
+{
+  "destination": "https://x.com/",
+  "strength": 0,
+  "sizePercent": 20,
+  "verifiedWidths": [
+    184,
+    256,
+    512,
+    768
+  ],
+  "portrait": "Fictional AI-generated sample person"
+}

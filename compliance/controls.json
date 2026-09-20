@@ -1,0 +1,233 @@
+{
+  "schemaVersion": 1,
+  "scope": "QR Upgrade local-first web, Android and iOS prototype",
+  "certification": "none",
+  "frameworks": [
+    "SOC 2 readiness: security; other categories subject to approved scope",
+    "ISO/IEC 27001:2022 readiness, subject to ISMS and Statement of Applicability",
+    "OWASP ASVS 5.0.0 selected web/API controls; not a full verification",
+    "OWASP MASVS selected mobile controls; device verification outstanding",
+    "GDPR and Australian APP applicability review; no legal compliance claim"
+  ],
+  "automated": [
+    {
+      "id": "T01",
+      "title": "Secret scan",
+      "method": "Gitleaks directory scan"
+    },
+    {
+      "id": "T02",
+      "title": "Static security analysis",
+      "method": "Semgrep TypeScript, React and Node.js rules"
+    },
+    {
+      "id": "T03",
+      "title": "Web dependency vulnerabilities",
+      "method": "npm audit, all severities"
+    },
+    {
+      "id": "T04",
+      "title": "Mobile dependency vulnerabilities",
+      "method": "npm audit, all severities"
+    },
+    {
+      "id": "T05",
+      "title": "Regression and security tests",
+      "method": "node:test suite"
+    },
+    {
+      "id": "T06",
+      "title": "Web type safety",
+      "method": "TypeScript"
+    },
+    {
+      "id": "T07",
+      "title": "Mobile type safety",
+      "method": "TypeScript"
+    },
+    {
+      "id": "T08",
+      "title": "Web production build",
+      "method": "Next.js"
+    },
+    {
+      "id": "T09",
+      "title": "Native configuration",
+      "method": "Regeneration and assertions"
+    },
+    {
+      "id": "T10",
+      "title": "Android/iOS/mobile-web bundles",
+      "method": "Expo production export"
+    },
+    {
+      "id": "T11",
+      "title": "HTTP security controls",
+      "method": "Live isolated production server checks"
+    },
+    {
+      "id": "T12",
+      "title": "Web software inventory",
+      "method": "CycloneDX SBOM"
+    },
+    {
+      "id": "T13",
+      "title": "Mobile software inventory",
+      "method": "CycloneDX SBOM"
+    }
+  ],
+  "manual": [
+    {
+      "id": "G01",
+      "title": "Scope, legal entity and accountable security owner",
+      "maxAgeDays": 90,
+      "area": "Governance",
+      "requiredEvidence": "Define entity, customers, services, data and exclusions; approve scope and assign named owners.",
+      "bindToSource": false
+    },
+    {
+      "id": "G02",
+      "title": "Risk register and policy approval",
+      "maxAgeDays": 90,
+      "area": "Risk management",
+      "requiredEvidence": "Approve this risk register, treatment decisions, security policies, residual risks and review cadence.",
+      "bindToSource": false
+    },
+    {
+      "id": "G03",
+      "title": "Workforce security and offboarding",
+      "maxAgeDays": 90,
+      "area": "People",
+      "requiredEvidence": "Training, confidentiality agreements, role checks and an observed joiner/mover/leaver workflow.",
+      "bindToSource": false
+    },
+    {
+      "id": "G04",
+      "title": "Production identity, MFA and least privilege",
+      "maxAgeDays": 30,
+      "area": "Access control",
+      "requiredEvidence": "Prove SSO/MFA and least privilege on GitHub, hosting, DNS, secrets, Apple, Google and Expo; record emergency access.",
+      "bindToSource": false
+    },
+    {
+      "id": "G05",
+      "title": "Access reviews and service-credential rotation",
+      "maxAgeDays": 90,
+      "area": "Access control",
+      "requiredEvidence": "Review active memberships and service accounts; evidence credential rotation/revocation and owner sign-off.",
+      "bindToSource": false
+    },
+    {
+      "id": "G06",
+      "title": "Protected repository and deployment approvals",
+      "maxAgeDays": 30,
+      "area": "Change management",
+      "requiredEvidence": "Protected branches, required security checks, independent review, restricted production environment and no direct ungated deploys.",
+      "bindToSource": false
+    },
+    {
+      "id": "G07",
+      "title": "Hosting, WAF, TLS and secret-manager configuration",
+      "maxAgeDays": 30,
+      "area": "Operations",
+      "requiredEvidence": "Verify production domains, TLS, rate limiting before authentication, network restrictions, secret storage and quota-outage behavior.",
+      "bindToSource": false
+    },
+    {
+      "id": "G08",
+      "title": "Security logging, alerts and retention",
+      "maxAgeDays": 30,
+      "area": "Operations",
+      "requiredEvidence": "Verify access-controlled central logs, privacy redaction, retention/deletion, actionable alerts and a test alert delivered to an owner.",
+      "bindToSource": false
+    },
+    {
+      "id": "G09",
+      "title": "Backups, recovery and continuity",
+      "maxAgeDays": 90,
+      "area": "Availability",
+      "requiredEvidence": "Test source/configuration recovery and service rollback. Record RTO/RPO and the approved absence of customer campaign storage.",
+      "bindToSource": false
+    },
+    {
+      "id": "G10",
+      "title": "Incident and breach-response exercise",
+      "maxAgeDays": 365,
+      "area": "Incident response",
+      "requiredEvidence": "Assign escalation contacts; run a tabletop; validate notifications, investigation, evidence preservation and legal decision points.",
+      "bindToSource": false
+    },
+    {
+      "id": "G11",
+      "title": "Vendor reviews and contractual controls",
+      "maxAgeDays": 90,
+      "area": "Supplier management",
+      "requiredEvidence": "Verify actual processors and regions, contracts/DPAs, subprocessors, access and review outcomes. Do not list unconfigured vendors as active.",
+      "bindToSource": false
+    },
+    {
+      "id": "G12",
+      "title": "Privacy applicability, notice and data rights",
+      "maxAgeDays": 180,
+      "area": "Privacy",
+      "requiredEvidence": "Approve legal entity/markets, controller/processor roles, applicable law, retention, transfer safeguards, privacy notice, rights handling and DPIA screening.",
+      "bindToSource": false
+    },
+    {
+      "id": "G13",
+      "title": "Endpoint and asset security",
+      "maxAgeDays": 30,
+      "area": "Asset management",
+      "requiredEvidence": "Inventory operator devices and systems; evidence encryption, patching, malware protection and access revocation.",
+      "bindToSource": false
+    },
+    {
+      "id": "G14",
+      "title": "Independent penetration test and remediation",
+      "maxAgeDays": 180,
+      "area": "Assurance",
+      "requiredEvidence": "Obtain a scoped web/API/mobile assessment and retest significant findings; cover upload handling, XSS, rate limits and mobile leakage.",
+      "bindToSource": true
+    },
+    {
+      "id": "G15",
+      "title": "Physical native-device validation",
+      "maxAgeDays": 90,
+      "area": "Mobile release",
+      "requiredEvidence": "On iOS and Android validate permissions, background/snapshot privacy, files/exports, no cleartext traffic, backup settings and camera behavior.",
+      "bindToSource": true
+    },
+    {
+      "id": "G16",
+      "title": "Signed native artifacts and store disclosures",
+      "maxAgeDays": 90,
+      "area": "Mobile release",
+      "requiredEvidence": "Record APK/AAB/IPA hashes, release signing identities, no debug signing, binary manifests, privacy declarations, store data-safety disclosures and review approval.",
+      "bindToSource": true
+    },
+    {
+      "id": "G17",
+      "title": "Vulnerability response and dependency licenses",
+      "maxAgeDays": 90,
+      "area": "Supply chain",
+      "requiredEvidence": "Approve license inventory and patch targets; record triage ownership and evidence that scan failures reach the responsible person.",
+      "bindToSource": false
+    },
+    {
+      "id": "G18",
+      "title": "Working vulnerability-reporting channel",
+      "maxAgeDays": 30,
+      "area": "Assurance",
+      "requiredEvidence": "Verify a monitored private reporting channel, owner, response target, triage and escalation; publish accurate contact information.",
+      "bindToSource": false
+    },
+    {
+      "id": "G19",
+      "title": "Enterprise data-feature launch approval",
+      "maxAgeDays": 90,
+      "area": "Product scope",
+      "requiredEvidence": "Approve local-only scope. Before accounts/cloud campaigns/GEO/analytics/AI launch, require tenant isolation, SSO/MFA/RBAC, audit trails, retention/deletion and supplier/privacy reviews.",
+      "bindToSource": true
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+# Scope, assets and data inventory — DRAFT, NOT APPROVED
+
+Owner: unassigned. Approver: unassigned. Legal entity, markets, hosting region and effective policy date: unconfirmed. Review these with the accountable privacy/security owners before public release.
+
+| Data or asset | Current handling | Exposure/retention decision |
+|---|---|---|
+| Destination URLs | In-memory web/mobile draft; encoded in exports; not fetched by the encoder | May contain identifiers or tokens. Embedded HTTP credentials and control characters are rejected; query tokens are not classified automatically. Exported QRs reveal their contents. |
+| Wi-Fi names and passwords | In-memory input; password field masked; plaintext data is intentionally encoded in QR exports | Anyone who scans the exported code can obtain credentials. Explain this before export. Clear draft or close the session; exported files remain user-controlled. |
+| vCard identity/contact details | In-memory draft and QR exports | Treat as personal data. No address-book permission or contact import is used. |
+| Uploaded artwork/scene | Local browser processing or system-selected native image | Web accepts bounded PNG/JPEG/WebP and redraws pixels; native selection has size/dimension bounds. No image-upload endpoint. Do not claim the system photo library itself is controlled by this app. |
+| Draft and validation result | No campaign persistence or cross-device sync | Clear draft controls reset app state; JavaScript does not provide a guaranteed cryptographic memory wipe. Native inactive-state cover is best effort pending device tests. |
+| Native temporary PNG/PDF/SVG | App cache for decode/share, removed in finally after operations | Crash-time leftovers can persist until cache cleanup/OS eviction. Backups are disabled in Android config; device encryption and final binary behavior require evidence. |
+| User-saved exports | Download folder / user-selected share destination | Outside the app's deletion boundary; app cannot revoke or delete user-shared QR content. |
+| Optional print API fields | Color/size/distance/module parameters only; no unknown fields | API default disabled. Requires service credential and central quota. No URL/image/Wi-Fi/contact data is accepted by its schema. |
+| API audit events | Event name, generated request ID, status, duration | No request body, authorization value or client IP in application audit entries. Deployment logs may independently include IPs/paths; host retention, access and redaction must be reviewed. |
+| Build/evidence metadata | Source hashes, scanner results, software inventory and approvals | Private internal assets. Evidence may reveal vulnerabilities; restrict access, approve retention, preserve audit history and define deletion. |
+| Service/CI/signing credentials | Not supplied in this workspace | Must use platform secret managers, separate environments, short-lived CI identity where available, ownership, rotation and revocation. Never NEXT_PUBLIC_ variables or mobile JS bundles. |
+
+Candidate suppliers from the product concept (Vercel, AWS, Clerk, Stripe, AI providers, analytics) are **not all active suppliers**. Confirm actual integrations before issuing a subprocessor list or DPA. Expo, npm/build tooling and the final app distribution channels also need supply-chain review in their actual roles.
+
+No auth/cloud tenancy is implemented. Do not sell tenant isolation, SSO, SCIM, enterprise audit logs, data-residency guarantees or customer-specific retention until those features exist and their release controls pass.
+
+Privacy review must determine controller/processor roles, applicable jurisdictions, collection notices, lawful basis/consent where needed, rights handling, contractual transfer safeguards and whether the planned GEO/AI features change impact-assessment requirements. Local processing reduces server collection but does not establish an exemption from privacy obligations.
+
+The 14 bundled AI-created artworks are development assets, not evidence of an active runtime AI supplier. Prompt records are in `research/qr-art/prompts.md`. User artwork is cropped/resized and encoded locally; native image manipulation creates temporary cache images which are removed after processing. Live cloud generation remains behind the AI feature gate.
+
+Optional profile portraits use the same bounded, local image-processing path. They are cropped and included in exported pixels; there is no face recognition or identity matching. The exported portrait is personal content and remains outside the app's deletion boundary after saving/sharing. The bundled sample portrait is a fictional AI-generated person. Portrait changes invalidate verification, and final-image decoding gates export. Native build checks do not replace physical-device photo-permission, memory and privacy tests.
