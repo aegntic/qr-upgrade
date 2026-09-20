@@ -276,3 +276,43 @@ test('bounded-outbox migration upgrades historical pending inventory while retai
  assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM notifications WHERE state='leased' AND incident_seq=99").get()!.n,4);
  assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM notifications WHERE state='abandoned' AND terminal_at IS NULL").get()!.n,0);sqlite.close();
 });
+
+test('pinned Wrangler splits ordered migrations into complete triggers accepted by local workerd D1',async()=>{
+ const {unstable_splitSqlQuery}=await import('wrangler');
+ const {Miniflare,convertV4MiniflareOptions}=await import('miniflare');
+ const runtime=new Miniflare(convertV4MiniflareOptions({modules:true,script:'',d1Databases:{OPERATIONS_DB:'isolated-migration-parser-regression'}}));
+ try{
+  const db=await runtime.getD1Database('OPERATIONS_DB');
+  await db.prepare('CREATE TABLE d1_migrations (name TEXT NOT NULL UNIQUE)').run();
+  for(const name of ['0001_operations.sql','0002_bounded_notifications.sql']){
+   const sql=readFileSync(new URL(`../workers/operations/migrations/${name}`,import.meta.url),'utf8');
+   // Match Wrangler buildMigrationQuery, including its trailing migration bookkeeping statement.
+   const parts=unstable_splitSqlQuery(`${sql}\nINSERT INTO "d1_migrations" (name) values ('${name}');`);
+   assert.equal(parts.length,13);
+   if(name.startsWith('0002'))for(const trigger of parts.filter(part=>/^CREATE TRIGGER\b/i.test(part))){
+    assert.doesNotMatch(trigger,/\bCASE\b/i,'avoid nested expression terminators in hosted query parsing');
+    assert.equal(trigger.match(/\bEND\b/gi)?.length,1,'only the trigger block has an END token');
+    assert.match(trigger,/\bEND$/i);
+   }
+   const result=await db.batch(parts.map(part=>db.prepare(part)));assert.equal(result.length,13);for(const row of result)assert.equal(row.success,true);
+  }
+  assert.deepEqual((await db.prepare('SELECT name FROM d1_migrations ORDER BY name').all()).results,[{name:'0001_operations.sql'},{name:'0002_bounded_notifications.sql'}]);
+  assert.equal((await db.prepare("SELECT COUNT(*) n FROM sqlite_master WHERE type='trigger'").first<{n:number}>())!.n,7);
+  // Exercise actual D1 trigger predicates, recovery suppression, coalescing and rollback.
+  await db.prepare("UPDATE monitor_state SET phase='open',incident_seq=1,updated_at=300 WHERE component='web_probe'").run();
+  await db.prepare("UPDATE monitor_state SET phase='healthy',updated_at=600 WHERE component='web_probe'").run();
+  assert.equal((await db.prepare("SELECT COUNT(*) n FROM notifications WHERE state='pending'").first<{n:number}>())!.n,2);
+  await assert.rejects(()=>db.prepare("UPDATE notifications SET incident_seq=2 WHERE component='web_probe' AND kind='incident'").run(),/notification inventory bound/);
+  await assert.rejects(()=>db.batch([
+   db.prepare("UPDATE monitor_state SET phase='open',incident_seq=2,updated_at=900 WHERE component='web_probe'"),
+   db.prepare("INSERT INTO error_rollups VALUES(0,'web','health','5xx','ok',1)"),
+  ]));
+  assert.equal((await db.prepare("SELECT incident_seq FROM monitor_state WHERE component='web_probe'").first<{incident_seq:number}>())!.incident_seq,1);
+  assert.equal((await db.prepare("SELECT COUNT(*) n FROM notifications WHERE state='pending'").first<{n:number}>())!.n,2);
+  await db.prepare("UPDATE monitor_state SET phase='open',incident_seq=2,updated_at=900 WHERE component='web_probe'").run();
+  assert.equal((await db.prepare("SELECT COUNT(*) n FROM notifications WHERE incident_seq=1 AND state='abandoned'").first<{n:number}>())!.n,2);
+  await db.prepare("UPDATE notifications SET state='abandoned',terminal_at=1200 WHERE incident_seq=2").run();
+  await db.prepare("UPDATE monitor_state SET phase='healthy',updated_at=1500 WHERE component='web_probe'").run();
+  assert.equal((await db.prepare("SELECT state FROM notifications WHERE incident_seq=2 AND kind='recovery'").first<{state:string}>())!.state,'abandoned');
+ }finally{await runtime.dispose();}
+});
