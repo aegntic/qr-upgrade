@@ -50,7 +50,10 @@ export default {
    const content=await request.text();if(content.length>5000)return reply({error:'Request too large.'},413);
    let job;try{job=validateArtInput(JSON.parse(content));}catch(e){return reply({error:e.message},400);}
    const existing=await env.DB.prepare('SELECT * FROM art_jobs WHERE id=? AND owner=?').bind(job.id,job.owner).first();
-   if(existing)return reply(publicJob(existing),existing.state==='pending'?202:200);
+   if(existing){
+    if(Date.now()-existing.created_at>3600000)return reply({error:'This generated artwork expired. Generate another or reopen a locally saved design.'},410);
+    return reply(publicJob(existing),existing.state==='pending'?202:200);
+   }
    const day=new Date().toISOString().slice(0,10), now=Date.now();
    // One atomic SQLite statement reserves both the global and network allowance.
    const reservation=await env.DB.prepare(`INSERT OR IGNORE INTO art_jobs(id,owner,network,day,state,created_at)

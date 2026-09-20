@@ -22,10 +22,17 @@ export function createArtHandler(config: ArtConfig) {
   const respond=(body:unknown,status=200,extra:Record<string,string>={})=>Response.json(body,{status,headers:{...headers,...extra}});
   const enabled=!!config.url&&!!config.secret&&config.secret.length>=32;
   const url=new URL(request.url);
-  if(request.method==='GET'&&!url.searchParams.has('id'))return respond({enabled,dailyLimit:3,provider:'Cloudflare Workers AI',model:'FLUX.1 Schnell'});
+  if(request.method==='GET'&&!url.searchParams.has('id')){
+   const cookie=request.headers.get('cookie')?.match(/(?:^|;\s*)qr-art-session=([a-f0-9]{64})(?:;|$)/)?.[1];
+   const session=cookie||randomBytes(32).toString('hex');
+   return respond({enabled,dailyLimit:3,provider:'Cloudflare Workers AI',model:'FLUX.1 Schnell'},200,cookie?{}:{'Set-Cookie':`${COOKIE}=${session}; HttpOnly; SameSite=Strict; Path=/api/art; Max-Age=3600${config.production?'; Secure':''}`});
+  }
   if(!enabled)return respond({error:'Live artwork generation is not configured.'},503);
   const cookie=request.headers.get('cookie')?.match(/(?:^|;\s*)qr-art-session=([a-f0-9]{64})(?:;|$)/)?.[1];
-  const session=cookie||randomBytes(32).toString('hex');
+  if(!cookie)return request.method==='GET'
+   ?respond({error:'Artwork not found in this browser session.'},404)
+   :respond({error:'Refresh the studio before generating artwork.'},409);
+  const session=cookie;
   const owner=createHmac('sha256',config.secret!).update(`owner:${session}`).digest('hex');
   const upstreamHeaders:Record<string,string>={authorization:`Bearer ${config.secret}`,'Content-Type':'application/json','x-qr-owner':owner};
   let target=`${config.url!.replace(/\/$/,'')}/art`, body:string|undefined;
@@ -45,7 +52,7 @@ export function createArtHandler(config: ArtConfig) {
   try{
    const response=await (config.fetcher||fetch)(target,{method:request.method,headers:upstreamHeaders,body,cache:'no-store',signal:AbortSignal.timeout(12000)});
    const data=await response.json();
-   return respond(data,response.status,request.method==='POST'?{'Set-Cookie':`${COOKIE}=${session}; HttpOnly; SameSite=Strict; Path=/api/art; Max-Age=3600${config.production?'; Secure':''}`}:{ });
+   return respond(data,response.status);
   }catch{return respond({error:'The artwork service is taking longer than expected. Try again shortly.'},503);}
  };
 }

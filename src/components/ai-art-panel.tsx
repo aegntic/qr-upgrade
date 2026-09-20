@@ -8,6 +8,11 @@ type Style = "steel" | "glass" | "botanical" | "illustrated";
 type Service = { enabled: boolean; dailyLimit: number };
 type Job = { id: string; status: "pending" | "ready" | "failed"; image?: string; error?: string };
 type Variant = { id: string; image: string; prompt: string; style: Style };
+type Outstanding = { id: string; prompt: string; style: Style };
+
+class ResponseError extends Error {
+  constructor(message: string, readonly status: number) { super(message); }
+}
 
 const styles: { id: Style; label: string }[] = [
   { id: "steel", label: "Steel" },
@@ -33,6 +38,7 @@ export default function AiArtPanel({ onApply }: { onApply: (image: string) => vo
   const [error, setError] = useState("");
   const [variants, setVariants] = useState<Variant[]>([]);
   const [selected, setSelected] = useState("");
+  const [outstanding, setOutstanding] = useState<Outstanding | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -56,25 +62,57 @@ export default function AiArtPanel({ onApply }: { onApply: (image: string) => vo
     if (timerRef.current) clearTimeout(timerRef.current);
   }, []);
 
-  async function poll(id: string, requestPrompt: string, requestStyle: Style, controller: AbortController) {
+  function pause(controller: AbortController) {
+    return new Promise<void>((resolve) => {
+      if (controller.signal.aborted) return resolve();
+      const finish = () => {
+        if (timerRef.current) clearTimeout(timerRef.current);
+        controller.signal.removeEventListener("abort", finish);
+        resolve();
+      };
+      timerRef.current = setTimeout(finish, 1500);
+      controller.signal.addEventListener("abort", finish, { once: true });
+    });
+  }
+
+  async function poll(request: Outstanding, controller: AbortController) {
     const deadline = Date.now() + 45_000;
     while (!controller.signal.aborted && Date.now() < deadline) {
-      const response = await fetch(`/api/art?id=${encodeURIComponent(id)}`, { signal: controller.signal });
-      if (!response.ok) throw new Error(await readError(response, "Could not check the artwork."));
+      const response = await fetch(`/api/art?id=${encodeURIComponent(request.id)}`, { signal: controller.signal });
+      if (!response.ok) throw new ResponseError(await readError(response, "Could not check the artwork."), response.status);
       const job = (await response.json()) as Job;
       if (job.status === "ready" && job.image) {
-        const variant = { id, image: job.image, prompt: requestPrompt, style: requestStyle };
-        setVariants((items) => [variant, ...items.filter((item) => item.id !== id)].slice(0, 3));
-        setSelected(id);
+        const variant = { id: request.id, image: job.image, prompt: request.prompt, style: request.style };
+        setVariants((items) => [variant, ...items.filter((item) => item.id !== request.id)].slice(0, 3));
+        setSelected(request.id);
+        setOutstanding(null);
         setStatus("idle");
         return;
       }
-      if (job.status === "failed") throw new Error(job.error || "Artwork generation failed.");
-      await new Promise<void>((resolve) => {
-        timerRef.current = setTimeout(resolve, 1500);
-      });
+      if (job.status === "failed") {
+        setOutstanding(null);
+        throw new ResponseError(job.error || "Artwork generation failed. Generate another to retry.", 422);
+      }
+      await pause(controller);
     }
     if (!controller.signal.aborted) throw new Error("Generation is taking longer than expected. Try again in a moment.");
+  }
+
+  async function checkAgain(request = outstanding) {
+    if (!request || status !== "idle") return;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setError("");
+    setStatus("pending");
+    try {
+      await poll(request, controller);
+    } catch (reason) {
+      if (controller.signal.aborted) return;
+      setStatus("idle");
+      if (reason instanceof ResponseError && [404, 410, 422].includes(reason.status)) setOutstanding(null);
+      setError(reason instanceof Error ? reason.message : "Could not check the artwork.");
+    }
   }
 
   async function generate() {
@@ -84,34 +122,25 @@ export default function AiArtPanel({ onApply }: { onApply: (image: string) => vo
     if (timerRef.current) clearTimeout(timerRef.current);
     const controller = new AbortController();
     abortRef.current = controller;
-    const id = crypto.randomUUID();
+    const request = { id: crypto.randomUUID(), prompt: requestPrompt, style };
+    setOutstanding(request);
     setError("");
     setStatus("submitting");
     try {
-      let accepted = false;
-      try {
-        const response = await fetch("/api/art", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ requestId: id, prompt: requestPrompt, style }),
-          signal: controller.signal,
-        });
-        if (!response.ok) throw new Error(await readError(response, "Could not start generation."));
-        accepted = true;
-      } catch (reason) {
-        if (controller.signal.aborted) return;
-        const check = await fetch(`/api/art?id=${encodeURIComponent(id)}`, { signal: controller.signal });
-        if (check.ok) accepted = true;
-        else throw reason;
-      }
-      if (accepted) {
-        setStatus("pending");
-        await poll(id, requestPrompt, style, controller);
-      }
+      const response = await fetch("/api/art", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId: request.id, prompt: request.prompt, style: request.style }),
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new ResponseError(await readError(response, "Could not start generation."), response.status);
+      setStatus("pending");
+      await poll(request, controller);
     } catch (reason) {
       if (controller.signal.aborted) return;
       setStatus("idle");
-      setError(reason instanceof Error ? reason.message : "Artwork generation failed.");
+      if (reason instanceof ResponseError && reason.status < 500) setOutstanding(null);
+      setError(reason instanceof Error ? reason.message : "The request may still be processing. Check again before generating another.");
     }
   }
 
@@ -155,10 +184,16 @@ export default function AiArtPanel({ onApply }: { onApply: (image: string) => vo
           </div>
           <button className="ai-art-generate" onClick={generate} disabled={!validPrompt || busy}>
             {busy ? <LoaderCircle className="ai-art-spinner" size={15} /> : <Sparkles size={15} />}
-            {status === "submitting" ? "Starting…" : status === "pending" ? "Creating artwork…" : variants.length ? "Generate another" : "Generate artwork"}
+            {status === "submitting" ? "Starting…" : status === "pending" ? "Creating artwork…" : variants.length || outstanding ? "Generate another" : "Generate artwork"}
           </button>
           <p className="ai-art-privacy">Only this prompt and style are sent when you generate. Your QR destination and images stay here.</p>
-          {error && <p className="ai-art-error" role="alert">{error} Generate again to retry; each new generation uses one daily attempt.</p>}
+          {error && <p className="ai-art-error" role="alert">{error}</p>}
+          {outstanding && status === "idle" && (
+            <div className="ai-art-recovery">
+              <button onClick={() => checkAgain()}>Check this generation again</button>
+              <p>This checks the same request and does not use another daily attempt. Generate another only when you want a new image.</p>
+            </div>
+          )}
           {variants.length > 0 && (
             <div className="ai-art-results">
               <div className="ai-art-variants" role="group" aria-label="Generated artwork variants">
@@ -172,7 +207,7 @@ export default function AiArtPanel({ onApply }: { onApply: (image: string) => vo
               <button className="ai-art-apply" disabled={!selectedVariant} onClick={() => selectedVariant && onApply(selectedVariant.image)}>
                 Apply selected artwork
               </button>
-              <p>Generated images expire after one hour. Apply one to keep working with it in this browser.</p>
+              <p>Generated images are available to apply for one hour and are removed from the service within two hours. Apply one to keep working with it in this browser.</p>
             </div>
           )}
         </>
