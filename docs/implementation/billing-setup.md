@@ -28,7 +28,7 @@ Production return URLs are fixed to `https://qrupgrade.com/billing?checkout=retu
 
 Every route requires the dispatcher's shared bearer authentication. Owner routes also require `x-qr-user` as a 64-character lowercase hexadecimal account hash.
 
-Capacity-creating requests also receive a server-created `x-qr-plan` header containing only `free`, `pro`, or `brand`. Browser-provided values are discarded by the authenticated web proxies. A missing header retains the Free limits for backward compatibility; any other value fails closed. Workers select numeric limits only from `shared/plan-limits.mjs` and bind them into the existing atomic `INSERT … SELECT` reservations, so concurrent requests cannot exceed a plan boundary.
+Capacity-creating requests also receive a server-created `x-qr-plan` header containing only `free`, `pro`, or `brand`. Browser-provided values are discarded by the authenticated web proxies. A missing header retains Free enforcement for backward-compatible creation requests; any other value fails closed. Collection reads remain independent of billing availability and omit capacity metadata when no authoritative tier header is present. Workers select numeric limits only from `shared/plan-limits.mjs` and bind them into the existing atomic `INSERT … SELECT` reservations, so concurrent requests cannot exceed a plan boundary.
 
 - `GET /billing` returns `{binding:null|row}`. Row fields: owner, customer_id, mode, reservation, tier, reserved_at, session_id, lease_until.
 - `PUT /billing/customer`, `{customerId,mode}` binds an owner exactly once; identical retries succeed; owner/customer reassignment or mode changes return 409. Customer IDs are unique across owners.

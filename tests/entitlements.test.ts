@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import Stripe from 'stripe';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import {PLAN_LIMITS,type PlanTier} from '../shared/plan-limits.mjs';
@@ -8,7 +9,7 @@ import {linksRequest} from '../workers/qr-service/links.mjs';
 import {assetRequest,contentRequest} from '../workers/qr-service/content.mjs';
 import {linksProxy} from '../src/lib/server/links';
 import {signAccountToken,type AccountConfig} from '../src/lib/server/account';
-import type {BillingConfig} from '../src/lib/server/billing';
+import {resolveEntitlement,type BillingConfig} from '../src/lib/server/billing';
 import {newDesign} from '../src/lib/new-design';
 import type {ContentDraft} from '../src/lib/content-types';
 
@@ -89,4 +90,37 @@ test('proxy ignores a browser-forged plan and sends only its server-resolved tie
   const request=new Request('http://localhost:3040/api/links',{method:'POST',headers:{cookie:`qr-session=${token}`,origin:'http://localhost:3040','Content-Type':'application/json','x-qr-plan':'brand','x-qr-user':other},body:JSON.stringify({name:'Link',target:'https://openai.com'})});
   assert.equal((await linksProxy(request,undefined,account,{config:disabled})).status,201);assert.equal(forwarded,'free');
  }finally{globalThis.fetch=original;}
+});
+
+test('authenticated paid collection GET omits unknown capacity and survives billing outage',async()=>{
+ const config:BillingConfig={account,enabled:true,key:'sk_test_fixture',webhookSecret:'whsec_fixture',pro:'price_pro',brand:'price_brand'};
+ const binding={owner,customer_id:'cus_paid',mode:'test',reservation:null,tier:null,reserved_at:null,session_id:null,lease_until:0};
+ const stripe={
+  prices:{retrieve:async(id:string)=>({id,active:true,livemode:false,type:'recurring',recurring:{interval:'month',interval_count:1,usage_type:'licensed'},billing_scheme:'per_unit',unit_amount:id==='price_brand'?2500:1200,currency:'usd'})},
+  customers:{retrieve:async()=>({id:'cus_paid',livemode:false,metadata:{owner}})},
+  subscriptions:{list:async()=>({data:[{customer:'cus_paid',livemode:false,status:'active',cancel_at_period_end:false,items:{data:[{quantity:1,price:{id:'price_brand'},current_period_end:123}]}}],has_more:false})}
+ } as unknown as Stripe;
+ const verified=await resolveEntitlement(owner,config,{stripe,fetch:async()=>Response.json({binding})});assert.equal(verified.tier,'brand');assert.equal(verified.limits.dynamicLinks,500);
+
+ const env=d1('../workers/qr-service/migrations/0003_links.sql'),token=await signAccountToken({sub:owner,name:'Paid User',email:'paid@example.com'},'session',account),original=globalThis.fetch;
+ try{
+  globalThis.fetch=async(input,init)=>linksRequest(new Request(input as string,init),env);
+  const outage={stripe:new Proxy({} as Stripe,{get(){throw new Error('Billing provider should not be read for collection GET');}}),fetch:async()=>{throw new Error('Billing service should not be read for collection GET');}};
+  const response=await linksProxy(new Request('http://localhost:3040/api/links',{headers:{cookie:`qr-session=${token}`}}),undefined,account,{config,deps:outage});assert.equal(response.status,200);
+  const collection=await response.json();assert.deepEqual(collection,{links:[]});assert.equal(Object.hasOwn(collection,'limit'),false);
+  const authoritative=await (await linksRequest(new Request('https://service.example/links',{headers:headers('brand')}),env)).json();assert.equal(authoritative.limit,500);
+ }finally{globalThis.fetch=original;env.sqlite.close();}
+});
+
+test('collection handlers expose capacity only with an authoritative tier header',async()=>{
+ const cloud=d1('../workers/qr-service/migrations/0002_accounts.sql'),content=d1('../workers/qr-service/migrations/0004_content.sql'),links=d1('../workers/qr-service/migrations/0003_links.sql');
+ try{
+  const calls=[
+   {key:'designs',limit:500,run:(tier?:string)=>cloudRequest(new Request('https://service.example/cloud/designs',{headers:headers(tier)}),{...cloud,ASSETS:{}})},
+   {key:'links',limit:500,run:(tier?:string)=>linksRequest(new Request('https://service.example/links',{headers:headers(tier)}),links)},
+   {key:'pages',limit:500,run:(tier?:string)=>contentRequest(new Request('https://service.example/content',{headers:headers(tier)}),{...content,ASSETS:{}})},
+   {key:'assets',limit:1000,run:(tier?:string)=>assetRequest(new Request('https://service.example/content-assets',{headers:headers(tier)}),{...content,ASSETS:{}})}
+  ];
+  for(const call of calls){const unknown=await (await call.run()).json();assert.deepEqual(unknown[call.key],[]);assert.equal(Object.hasOwn(unknown,'limit'),false);const known=await (await call.run('brand')).json();assert.equal(known.limit,call.limit);}
+ }finally{cloud.sqlite.close();content.sqlite.close();links.sqlite.close();}
 });

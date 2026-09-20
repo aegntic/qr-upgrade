@@ -53,12 +53,12 @@ const metadata=row=>({id:row.id,name:row.name,archived:!!row.archived,createdAt:
 export async function cloudRequest(request,env){
  // Caller MUST authenticate SERVICE_SECRET before entering this module.
  const owner=request.headers.get('x-qr-user');if(!HASH.test(owner||''))return reply({error:'Unauthorized.'},401);
- const limits=limitsForPlan(request.headers.get('x-qr-plan')??'free');if(!limits)return reply({error:'Invalid plan.'},400);
+ const tier=request.headers.get('x-qr-plan'),limits=limitsForPlan(tier??'free');if(!limits)return reply({error:'Invalid plan.'},400);
  if(!env.DB||!env.ASSETS)return reply({error:'Cloud storage is not configured.'},503);
  const path=new URL(request.url).pathname,match=path.match(/^\/cloud\/designs(?:\/([^/]+))?$/),id=match?.[1];
  if(!match||id&&!UUID.test(id))return reply({error:'Design not found.'},404);
  try{
-  if(!id&&request.method==='GET'){const result=await env.DB.prepare('SELECT id,name,archived,created_at,updated_at FROM cloud_designs WHERE owner=? AND ready=1 ORDER BY updated_at DESC').bind(owner).all();return reply({designs:result.results.map(metadata),limit:limits.cloudDesigns});}
+  if(!id&&request.method==='GET'){const result=await env.DB.prepare('SELECT id,name,archived,created_at,updated_at FROM cloud_designs WHERE owner=? AND ready=1 ORDER BY updated_at DESC').bind(owner).all();return reply({designs:result.results.map(metadata),...(tier?{limit:limits.cloudDesigns}:{})});}
   const row=id?await env.DB.prepare('SELECT * FROM cloud_designs WHERE id=? AND owner=? AND ready=1').bind(id,owner).first():null;
   if(id&&!row)return reply({error:'Design not found.'},404);
   if(id&&request.method==='GET'){const stored=await env.ASSETS.get(row.r2key);if(!stored)return reply({error:'Design temporarily unavailable.'},503);const snapshot=await stored.json();return reply({design:{...metadata(row),draft:{...snapshot.draft,name:row.name},artifact:{png:snapshot.artifact.png}}});}
