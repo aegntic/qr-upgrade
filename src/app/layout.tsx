@@ -41,7 +41,13 @@ export const metadata: Metadata = {
     title: "QR Upgrade — Your brand. Every scan.",
     description,
   },
-  icons: { icon: "/icon.svg" },
+  icons: {
+    icon: {
+      url: "/brand/qr-upgrade-logo-v2.png",
+      type: "image/png",
+      sizes: "1254x1254",
+    },
+  },
 };
 export default function RootLayout({
   children,

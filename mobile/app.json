@@ -5,7 +5,7 @@
     "scheme": "qrupgrade",
     "version": "0.1.0",
     "orientation": "default",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/icon-v2.png",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
@@ -29,7 +29,7 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/icon.png"
+      "favicon": "./assets/icon-v2.png"
     },
     "plugins": [
       "expo-router",
