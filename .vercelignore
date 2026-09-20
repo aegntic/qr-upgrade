@@ -4,6 +4,10 @@ node_modules/
 .git/
 .env*
 !.env.example
+.dev.vars*
+**/.dev.vars*
+.wrangler/
+**/.wrangler/
 mobile/
 research/
 compliance/
@@ -16,13 +20,13 @@ scripts/
 README.md
 DESIGN.md
 PRODUCT.md
-# Next server routes reuse these two validation modules. Keep the Worker runtime,
-# migrations and private configuration out of the Vercel source package.
-workers/*
-!workers/qr-service/
-workers/qr-service/*
-!workers/qr-service/content.mjs
-!workers/qr-service/links.mjs
+# Next server routes reuse content.mjs and links.mjs. Exclude only the Worker
+# runtime, provider modules, migrations and private configuration.
+workers/qr-service/worker.mjs
+workers/qr-service/billing.mjs
+workers/qr-service/cloud.mjs
+workers/qr-service/migrations/
+workers/qr-service/wrangler.jsonc
 .workflows/
 docs/
 
