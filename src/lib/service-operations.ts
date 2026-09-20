@@ -26,3 +26,16 @@ export class ServiceOperations {
   return {signal:controller.signal,alive,current:()=>alive()&&validEpoch(),recapture:()=>{validEpoch=epochs.capture(kind);}};
  }
 }
+
+/** Passive reads can agree without invalidating one another; explicit transitions always win. */
+export function captureAccountConfirmation(owner:{current:string|null|undefined},epochs:ServiceEpochs,reconcile:(next:string|null)=>void){
+ const observedOwner=owner.current,valid=epochs.capture('account');
+ return (next:string|null)=>{
+  if(!valid())return false;
+  // Another read established an identity after this request began. Only agreement is safe.
+  if(owner.current!==observedOwner&&owner.current!==next)return false;
+  if(owner.current!==undefined&&owner.current!==next)reconcile(next);
+  else owner.current=next;
+  return true;
+ };
+}

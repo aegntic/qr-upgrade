@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {ServiceEpochs,ServiceOperations} from '../src/lib/service-operations';
+import {ServiceEpochs,ServiceOperations,captureAccountConfirmation} from '../src/lib/service-operations';
 function deferred<T>(){let resolve!:(value:T)=>void;const promise=new Promise<T>(done=>{resolve=done;});return {promise,resolve};}
 // The same synchronous epoch/setter contract used by WorkflowProvider, with real deferred work.
 function state(){
@@ -64,4 +64,39 @@ test('an authorized upload response cannot reintroduce an asset after logout or 
   const upload=(async()=>{const asset=await response.promise;if(operation.current())store.edit('content',asset);})();
   store.reconcile(next);response.resolve('private-asset-A');await upload;assert.equal(store.content,'');assert.equal(store.owner,next);
  }
+});
+for(const first of ['workspace','restoration'] as const){
+ test(`passive same-account responses keep both transfer and collection when ${first} finishes first`,async()=>{
+  const epochs=new ServiceEpochs(),owner:{current:string|null|undefined}={current:undefined};
+  let draft='',collection:string[]=[];let transfer=true,signedIn=false;
+  const reconcile=(next:string|null)=>{epochs.reconcile();owner.current=next;draft='';transfer=false;};
+  const workspace=new ServiceOperations(),restoration=new ServiceOperations();workspace.mount();restoration.mount();
+  const load=workspace.begin(epochs,'account'),restore=restoration.begin(epochs,'both');
+  const confirmLoad=captureAccountConfirmation(owner,epochs,reconcile),confirmRestore=captureAccountConfirmation(owner,epochs,reconcile);
+  const loadResponse=deferred<string>(),restoreResponse=deferred<string>();
+  const loadDone=(async()=>{const next=await loadResponse.promise;if(!load.current()||!confirmLoad(next))return;signedIn=true;load.recapture();if(load.current())collection=['existing page'];})();
+  const restoreDone=(async()=>{const next=await restoreResponse.promise;if(!restore.current()||!transfer||!confirmRestore(next))return;epochs.edit('content');draft='opted-in draft';transfer=false;})();
+  if(first==='workspace'){loadResponse.resolve('account-A');await loadDone;assert.equal(transfer,true);restoreResponse.resolve('account-A');}
+  else{restoreResponse.resolve('account-A');await restoreDone;loadResponse.resolve('account-A');}
+  await Promise.all([loadDone,restoreDone]);assert.equal(owner.current,'account-A');assert.equal(signedIn,true);assert.deepEqual(collection,['existing page']);assert.equal(draft,'opted-in draft');
+ });
+}
+test('explicit logout wins over both concurrent passive account requests',async()=>{
+ const epochs=new ServiceEpochs(),owner:{current:string|null|undefined}={current:undefined};
+ let draft='';const reconcile=(next:string|null)=>{epochs.reconcile();owner.current=next;draft='';};
+ const confirmLoad=captureAccountConfirmation(owner,epochs,reconcile),confirmRestore=captureAccountConfirmation(owner,epochs,reconcile);
+ const response=deferred<string>();const pending=(async()=>{const next=await response.promise;assert.equal(confirmLoad(next),false);if(confirmRestore(next))draft='private A';})();
+ reconcile(null);response.resolve('account-A');await pending;assert.equal(owner.current,null);assert.equal(draft,'');
+});
+test('conflicting concurrent identity responses cannot replace the first confirmed owner',()=>{
+ const epochs=new ServiceEpochs(),owner:{current:string|null|undefined}={current:undefined};
+ const reconcile=(next:string|null)=>{epochs.reconcile();owner.current=next;};
+ const first=captureAccountConfirmation(owner,epochs,reconcile),late=captureAccountConfirmation(owner,epochs,reconcile);
+ assert.equal(first('account-B'),true);assert.equal(late('account-A'),false);assert.equal(owner.current,'account-B');
+});
+test('a new passive check detecting an actual owner change invalidates pending private operations',()=>{
+ const epochs=new ServiceEpochs(),owner:{current:string|null|undefined}={current:'account-A'};
+ let draft='private A';const reconcile=(next:string|null)=>{epochs.reconcile();owner.current=next;draft='';};
+ const valid=epochs.capture('content'),confirm=captureAccountConfirmation(owner,epochs,reconcile);
+ assert.equal(confirm('account-B'),true);assert.equal(valid(),false);assert.equal(draft,'');assert.equal(owner.current,'account-B');
 });

@@ -4,9 +4,9 @@ import {useRouter} from 'next/navigation';
 import type { EditorDraft, DesignArtifact } from '@/lib/editor-draft';
 import {contentDirty,linkDirty,newContentEditor,newLinkEditor,type ContentEditor,type LinkEditor} from '@/lib/service-drafts';
 import {SIGN_IN_DRAFT_KEY,encodeSignInDraft,decodeSignInDraft} from '@/lib/sign-in-drafts';
-import {ServiceEpochs,ServiceOperations} from '@/lib/service-operations';
+import {ServiceEpochs,ServiceOperations,captureAccountConfirmation} from '@/lib/service-operations';
 import {useDiscardDialog} from './discard-dialog';
-type Workflow = { epochs: ServiceEpochs; contentEditor: ContentEditor; setContentEditor: Dispatch<SetStateAction<ContentEditor>>; linkEditor: LinkEditor; setLinkEditor: Dispatch<SetStateAction<LinkEditor>>; reconcileAccount: (owner:string|null)=>void; draft: EditorDraft | null; artifact: DesignArtifact | null; savedId?: string; setDesign: (draft: EditorDraft, artifact: DesignArtifact | null, savedId?: string) => void; clear: () => void };
+type Workflow = { epochs: ServiceEpochs; beginAccountCheck: ()=>((owner:string|null)=>boolean); contentEditor: ContentEditor; setContentEditor: Dispatch<SetStateAction<ContentEditor>>; linkEditor: LinkEditor; setLinkEditor: Dispatch<SetStateAction<LinkEditor>>; reconcileAccount: (owner:string|null)=>void; draft: EditorDraft | null; artifact: DesignArtifact | null; savedId?: string; setDesign: (draft: EditorDraft, artifact: DesignArtifact | null, savedId?: string) => void; clear: () => void };
 const Context = createContext<Workflow | null>(null);
 export function WorkflowProvider({ children }: { children: ReactNode }) {
   const router=useRouter();
@@ -19,17 +19,18 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   const transfer=useRef<{read:boolean;raw:string|null}>({read:false,raw:null});
   const [recovered,setRecovered]=useState(false);
   const discard=useDiscardDialog();
-  const reconcileAccount=useCallback((nextOwner:string|null)=>{epochs.reconcile();transfer.current.raw=null;setRecovered(false);if(owner.current!==undefined&&owner.current!==nextOwner){setContentEditor(newContentEditor());setLinkEditor(newLinkEditor());try{sessionStorage.removeItem(SIGN_IN_DRAFT_KEY);}catch{}}owner.current=nextOwner;},[epochs,setContentEditor,setLinkEditor]);
+  const reconcileAccount=useCallback((nextOwner:string|null)=>{epochs.reconcile();transfer.current.raw=null;setRecovered(false);setContentEditor(newContentEditor());setLinkEditor(newLinkEditor());try{sessionStorage.removeItem(SIGN_IN_DRAFT_KEY);}catch{}owner.current=nextOwner;},[epochs,setContentEditor,setLinkEditor]);
+  const beginAccountCheck=useCallback(()=>captureAccountConfirmation(owner,epochs,reconcileAccount),[epochs,reconcileAccount]);
   useEffect(()=>{
     if(!transfer.current.read){transfer.current.read=true;try{transfer.current.raw=sessionStorage.getItem(SIGN_IN_DRAFT_KEY);sessionStorage.removeItem(SIGN_IN_DRAFT_KEY);}catch{}}
     const raw=transfer.current.raw;if(!raw)return;
-    const operations=new ServiceOperations();operations.mount();const operation=operations.begin(epochs,'both');
+    const operations=new ServiceOperations();operations.mount();const operation=operations.begin(epochs,'both'),confirmAccount=beginAccountCheck();
     fetch('/api/account',{cache:'no-store',signal:operation.signal}).then(async response=>{if(!response.ok)throw new Error();return response.json();}).then(status=>{
       if(!operation.current())return;const nextOwner=status.signedIn?status.user.email:null,restored=decodeSignInDraft(raw!,nextOwner);
-      if(restored){reconcileAccount(nextOwner);setContentEditor(restored.content);setLinkEditor(restored.link);setRecovered(true);transfer.current.raw=null;}
+      if(restored&&confirmAccount(nextOwner)){setContentEditor(restored.content);setLinkEditor(restored.link);setRecovered(true);transfer.current.raw=null;}
     }).catch(()=>{});
     return()=>{operations.unmount();};
-  },[epochs,reconcileAccount,setContentEditor,setLinkEditor]);
+  },[epochs,beginAccountCheck,setContentEditor,setLinkEditor]);
   const dirty=contentDirty(contentEditor)||linkDirty(linkEditor);
   useEffect(()=>{
     if(!dirty)return;
@@ -48,7 +49,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   },[dirty,discard.request,contentEditor,linkEditor]);
   const setDesign = useCallback((draft: EditorDraft, artifact: DesignArtifact | null, savedId?: string) => setValue({ draft, artifact, savedId }), []);
   const clear = useCallback(() => setValue({ draft: null, artifact: null }), []);
-  const state = useMemo(() => ({ ...value, epochs,setDesign, clear,contentEditor,setContentEditor,linkEditor,setLinkEditor,reconcileAccount }), [value, epochs,setDesign, clear,contentEditor,linkEditor,reconcileAccount,setContentEditor,setLinkEditor]);
+  const state = useMemo(() => ({ ...value, epochs,beginAccountCheck,setDesign, clear,contentEditor,setContentEditor,linkEditor,setLinkEditor,reconcileAccount }), [value, epochs,beginAccountCheck,setDesign, clear,contentEditor,linkEditor,reconcileAccount,setContentEditor,setLinkEditor]);
   return <Context.Provider value={state}>{recovered&&<aside className="service-recovered" role="status">Your draft is back in this tab. Temporary sign-in storage has been cleared. <a href="/content" onClick={event=>{event.preventDefault();router.push('/content');}}>Open page draft</a> · <a href="/links" onClick={event=>{event.preventDefault();router.push('/links');}}>Open link draft</a> <button onClick={()=>setRecovered(false)} aria-label="Dismiss draft recovery message">Dismiss</button></aside>}{children}{discard.dialog}</Context.Provider>;
 }
 export function useWorkflow() { const state = useContext(Context); if (!state) throw new Error('WorkflowProvider is required.'); return state; }
