@@ -1,3 +1,4 @@
+import { accountRequest, securityCleanupStatements } from "./account.mjs";
 import { cloudRequest } from "./cloud.mjs";
 import { linksRequest, resolveLink } from "./links.mjs";
 import { contentRequest, assetRequest, publicContent } from "./content.mjs";
@@ -41,6 +42,7 @@ export default {
   const url=new URL(request.url);
   if(url.pathname==='/health'&&request.method==='GET')return reply({ready:!!env.DB&&!!env.AI,model:env.AI_MODEL});
   try {
+   if(url.pathname.startsWith('/account/'))return await accountRequest(request,env);
    if(url.pathname==='/links'||url.pathname.startsWith('/links/'))return await linksRequest(request,env);
    if(url.pathname.startsWith('/resolve/'))return await resolveLink(request,env);
    if(url.pathname==='/content'||url.pathname.startsWith('/content/'))return await contentRequest(request,env);
@@ -75,10 +77,11 @@ export default {
    if(!reservation)return reply({error:'Today’s artwork allowance has been reached. You can still use the library or your own image. Please try again tomorrow.'},429);
    ctx.waitUntil(generate(env,job));
    return reply({id:job.id,status:'pending'},202);
-  }catch{return reply({error:'Artwork service is temporarily unavailable. Please try again.'},503);}
+  }catch{return reply({error:url.pathname.startsWith('/account/')?'Account security is temporarily unavailable. Please try again.':'Artwork service is temporarily unavailable. Please try again.'},503);}
  },
  async scheduled(_event,env,ctx){ctx.waitUntil(env.DB.batch([
   env.DB.prepare("UPDATE art_jobs SET image=NULL,state='expired' WHERE created_at<? AND state!='expired'").bind(Date.now()-3600000),
-  env.DB.prepare('DELETE FROM art_jobs WHERE created_at<?').bind(Date.now()-3*86400000)
+  env.DB.prepare('DELETE FROM art_jobs WHERE created_at<?').bind(Date.now()-3*86400000),
+  ...securityCleanupStatements(env)
  ]));}
 };

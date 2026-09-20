@@ -1,6 +1,6 @@
 import {createHmac} from 'node:crypto';
 import {isIP} from 'node:net';
-import {accountConfig,accountReply,accountSameOrigin,getAccount,type AccountConfig,type EntitlementOptions} from './account';
+import {accountConfig,accountReply,accountSameOrigin,checkedAccount,type AccountConfig,type EntitlementOptions} from './account';
 import {billingConfig,resolveEntitlement} from './billing';
 import {readContentBody} from '../../../workers/qr-service/content.mjs';
 import type {PublicContentPage} from '../content-types';
@@ -15,7 +15,7 @@ async function forward(path:string,c:AccountConfig,init:RequestInit={},binary=fa
  try{const result=await service(path,c,init);if(result.status>=500)return unavailable();if(binary&&result.ok){const headers=new Headers({'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Content-Security-Policy':"sandbox; default-src 'none'"});for(const name of ['Content-Type','Content-Disposition','Content-Length'])if(result.headers.has(name))headers.set(name,result.headers.get(name)!);return new Response(result.body,{status:result.status,headers});}return accountReply(await result.json(),result.status);}catch{return unavailable();}
 }
 async function privateProxy(r:Request,path:string,c:AccountConfig,allowed:boolean,limit:number,binary=false,needsEntitlement=false,entitlementOptions?:EntitlementOptions){
- const user=await getAccount(r,c);if(!user)return accountReply({error:'Sign in to manage your content.'},401);if(!allowed)return accountReply({error:'Method not allowed.'},405);
+ const user=await checkedAccount(r,c,entitlementOptions?.accountDeps);if(user instanceof Response)return user;if(!user)return accountReply({error:'Sign in to manage your content.'},401);if(!allowed)return accountReply({error:'Method not allowed.'},405);
  let body:string|undefined;if(r.method!=='GET'){if(!accountSameOrigin(r,c))return accountReply({error:'Open your account to update content.'},403);try{body=JSON.stringify(await readContentBody(r,limit));}catch{return accountReply({error:'Use valid JSON within the upload limits.'},400);}}
  let plan:string|undefined;if(needsEntitlement)try{plan=(await resolveEntitlement(user.id,entitlementOptions?.config||{...billingConfig(),account:c},entitlementOptions?.deps)).tier;}catch{return unavailable();}
  return forward(path,c,{method:r.method,headers:{'x-qr-user':user.id,'Content-Type':'application/json',...(plan?{'x-qr-plan':plan}:{})},body},binary);

@@ -1,3 +1,4 @@
+import {validAccountDeps} from './fixtures/account-deps';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import Stripe from 'stripe';
@@ -84,11 +85,11 @@ test('downgrade over quota preserves reads, edits, pause and archive operations'
 });
 
 test('proxy ignores a browser-forged plan and sends only its server-resolved tier',async()=>{
- const token=await signAccountToken({sub:owner,name:'User',email:'user@example.com'},'session',account),original=globalThis.fetch;let forwarded='';
+ const token=await signAccountToken({sv:1,sub:owner,name:'User',email:'user@example.com'},'session',account),original=globalThis.fetch;let forwarded='';
  try{
   globalThis.fetch=async(_url,init)=>{const sent=new Headers(init?.headers);forwarded=sent.get('x-qr-plan')||'';assert.equal(sent.get('x-qr-user'),owner);return Response.json({link:{}},{status:201});};
   const request=new Request('http://localhost:3040/api/links',{method:'POST',headers:{cookie:`qr-session=${token}`,origin:'http://localhost:3040','Content-Type':'application/json','x-qr-plan':'brand','x-qr-user':other},body:JSON.stringify({name:'Link',target:'https://openai.com'})});
-  assert.equal((await linksProxy(request,undefined,account,{config:disabled})).status,201);assert.equal(forwarded,'free');
+  assert.equal((await linksProxy(request,undefined,account,{config:disabled,accountDeps:validAccountDeps(owner)})).status,201);assert.equal(forwarded,'free');
  }finally{globalThis.fetch=original;}
 });
 
@@ -102,11 +103,11 @@ test('authenticated paid collection GET omits unknown capacity and survives bill
  } as unknown as Stripe;
  const verified=await resolveEntitlement(owner,config,{stripe,fetch:async()=>Response.json({binding})});assert.equal(verified.tier,'brand');assert.equal(verified.limits.dynamicLinks,500);
 
- const env=d1('../workers/qr-service/migrations/0003_links.sql'),token=await signAccountToken({sub:owner,name:'Paid User',email:'paid@example.com'},'session',account),original=globalThis.fetch;
+ const env=d1('../workers/qr-service/migrations/0003_links.sql'),token=await signAccountToken({sv:1,sub:owner,name:'Paid User',email:'paid@example.com'},'session',account),original=globalThis.fetch;
  try{
   globalThis.fetch=async(input,init)=>linksRequest(new Request(input as string,init),env);
   const outage={stripe:new Proxy({} as Stripe,{get(){throw new Error('Billing provider should not be read for collection GET');}}),fetch:async()=>{throw new Error('Billing service should not be read for collection GET');}};
-  const response=await linksProxy(new Request('http://localhost:3040/api/links',{headers:{cookie:`qr-session=${token}`}}),undefined,account,{config,deps:outage});assert.equal(response.status,200);
+  const response=await linksProxy(new Request('http://localhost:3040/api/links',{headers:{cookie:`qr-session=${token}`}}),undefined,account,{config,deps:outage,accountDeps:validAccountDeps(owner)});assert.equal(response.status,200);
   const collection=await response.json();assert.deepEqual(collection,{links:[]});assert.equal(Object.hasOwn(collection,'limit'),false);
   const authoritative=await (await linksRequest(new Request('https://service.example/links',{headers:headers('brand')}),env)).json();assert.equal(authoritative.limit,500);
  }finally{globalThis.fetch=original;env.sqlite.close();}

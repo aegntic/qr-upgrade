@@ -1,6 +1,6 @@
 import Stripe from 'stripe';
 import {randomBytes} from 'node:crypto';
-import {accountConfig,configured,accountOrigin,accountSameOrigin,accountReply,getAccount,type AccountConfig} from './account';
+import {accountConfig,configured,accountOrigin,accountSameOrigin,accountReply,checkedAccount,type AccountConfig} from './account';
 import {PLAN_LIMITS} from '../../../shared/plan-limits.mjs';
 import type {BillingPlan,BillingStatus,BillingTier,Entitlement} from '../billing-types';
 export type BillingConfig={account:AccountConfig;enabled:boolean;key?:string;webhookSecret?:string;pro?:string;brand?:string};
@@ -58,7 +58,7 @@ export async function resolveEntitlement(owner:string,c=billingConfig(),d:Billin
 }
 function hosted(url:string|null,host:string){if(!url)throw new Error('Missing URL');const u=new URL(url);if(u.protocol!=='https:'||u.hostname!==host||u.port||u.username||u.password)throw new Error('Invalid URL');return url;}
 export async function billingStatus(r:Request,c=billingConfig(),d:BillingDeps={}){
- const user=await getAccount(r,c.account);
+ const user=await checkedAccount(r,c.account,d);if(user instanceof Response)return user;
  if(!c.enabled)return accountReply({configured:false,signedIn:!!user,plans:[],subscription:null,canManage:false,entitlement:entitlement(null)} satisfies BillingStatus);
  if(!billingReady(c))return unavailable();
  try{const s=client(c,d),offers=await plans(s,c);const b=user?(await service(c,d,'/billing',user.id)).binding:null;
@@ -68,7 +68,7 @@ export async function billingStatus(r:Request,c=billingConfig(),d:BillingDeps={}
  }catch{return unavailable();}
 }
 export async function billingAction(r:Request,action:'checkout'|'portal',c=billingConfig(),d:BillingDeps={}){
- const user=await getAccount(r,c.account);if(!user)return accountReply({error:'Sign in to manage billing.'},401);
+ const user=await checkedAccount(r,c.account,d);if(user instanceof Response)return user;if(!user)return accountReply({error:'Sign in to manage billing.'},401);
  if(!accountSameOrigin(r,c.account))return accountReply({error:'Open billing to continue.'},403);
  if(!billingReady(c))return unavailable();
  let tier:BillingTier|undefined;

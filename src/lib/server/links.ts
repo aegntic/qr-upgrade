@@ -1,9 +1,9 @@
-import {accountConfig,accountReply,accountSameOrigin,getAccount,type AccountConfig,type EntitlementOptions} from './account';
+import {accountConfig,accountReply,accountSameOrigin,checkedAccount,type AccountConfig,type EntitlementOptions} from './account';
 import {billingConfig,resolveEntitlement} from './billing';
 import {readLinkBody,validateTarget} from '../../../workers/qr-service/links.mjs';
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 export async function linksProxy(r:Request,id?:string,c:AccountConfig=accountConfig(),entitlementOptions?:EntitlementOptions) {
- const user=await getAccount(r,c);if(!user)return accountReply({error:'Sign in to manage your links.'},401);
+ const user=await checkedAccount(r,c,entitlementOptions?.accountDeps);if(user instanceof Response)return user;if(!user)return accountReply({error:'Sign in to manage your links.'},401);
  if(id&&!UUID.test(id))return accountReply({error:'Link not found.'},404);
  if(!['GET','POST','PATCH'].includes(r.method)||id&&r.method==='POST'||!id&&r.method==='PATCH')return accountReply({error:'Method not allowed.'},405);
  let body:string|undefined;
