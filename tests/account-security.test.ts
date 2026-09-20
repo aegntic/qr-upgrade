@@ -77,8 +77,8 @@ test('history isolates owners; records fixed fields; insert and scheduled prunin
  }finally{f.sqlite.close();}
 });
 test('concurrent duplicate revocations increment exactly once and cannot reinstate prior versions',async()=>{
- const f=environment();try{await f.service('sign-in','POST',{});const results=await Promise.all([f.service('revoke','POST',{version:1}),f.service('revoke','POST',{version:1})]);assert.deepEqual(results.map(r=>r.status).sort(),[200,401]);
- assert.equal(f.sqlite.prepare('SELECT session_version FROM account_security').get()!.session_version,2);await f.service('sign-in','POST',{});assert.equal((await f.service('revoke','POST',{version:1})).status,401);assert.equal((await f.service('revoke','POST',{version:2})).status,200);assert.equal(await getAccount(browser(await session(2)),config,f.deps),null);
+ const f=environment();try{await f.service('sign-in','POST',{});const results=await Promise.all([f.service('revoke','POST',{version:1}),f.service('revoke','POST',{version:1})]);assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);
+ assert.equal(f.sqlite.prepare('SELECT session_version FROM account_security').get()!.session_version,2);await f.service('sign-in','POST',{});assert.equal((await f.service('revoke','POST',{version:1})).status,409);assert.equal((await f.service('revoke','POST',{version:2})).status,200);assert.equal(await getAccount(browser(await session(2)),config,f.deps),null);
  }finally{f.sqlite.close();}
 });
 test('callback provider verification or central state failure never sets a session cookie',async()=>{
@@ -105,5 +105,29 @@ test('Worker scheduled cleanup prunes expired and excess events, preserving dura
  const insert=f.sqlite.prepare('INSERT INTO account_security_events VALUES(?,?,?,?)');for(let n=0;n<110;n++)insert.run(crypto.randomUUID(),owner,'sign_in',Date.now()-n);insert.run(crypto.randomUUID(),owner,'sign_in',0);
  let work:Promise<unknown>|undefined;await worker.scheduled({},f.env,{waitUntil(p:Promise<unknown>){work=p;}});await work;
  assert.equal(f.sqlite.prepare('SELECT count(*) n FROM account_security_events').get()!.n,100);assert.equal(f.sqlite.prepare('SELECT count(*) n FROM account_security_events WHERE created_at=0').get()!.n,0);assert.equal(f.sqlite.prepare('SELECT session_version FROM account_security').get()!.session_version,1);
+ }finally{f.sqlite.close();}
+});
+test('production dispatcher bearer misconfiguration is unavailable, never a signed-out account transition',async()=>{
+ const token=await session();
+ for(const serviceSecret of ['t'.repeat(64),undefined]){
+ let reads=0;const deps={fetch:async(input:RequestInfo|URL,init?:RequestInit)=>worker.fetch(new Request(String(input),init),{SERVICE_SECRET:serviceSecret,DB:{prepare(){reads++;throw new Error('Must not reach D1');}}},{waitUntil(){}})};
+ const responses=[await accountStatus(browser(token),config,deps),await accountSecurity(browser(token),'history',config,deps),await accountSecurity(browser(token,'POST',{confirm:true}),'revoke',config,deps),await cloudProxy(browser(token),undefined,config,{accountDeps:deps}),await linksProxy(browser(token),undefined,config,{accountDeps:deps}),await contentProxy(browser(token),undefined,config,false,{accountDeps:deps}),await assetProxy(browser(token),undefined,config,{accountDeps:deps}),await billingStatus(browser(token),{account:config,enabled:false},deps),await billingAction(browser(token),'portal',{account:config,enabled:false},deps)];
+ for(const response of responses){assert.equal(response.status,503);assert.equal(response.headers.get('set-cookie'),null);const body=await response.json();assert.equal(Object.hasOwn(body,'signedIn'),false);assert.match(body.error,/temporarily unavailable/);}
+ assert.equal(reads,0);
+ }
+});
+test('only an exact owner-bound typed denial counts as an invalid session; upstream auth errors remain unavailable',async()=>{
+ const token=await session();
+ for(const [status,body] of [[401,{error:'Unauthorized.'}],[401,{code:'account_session_invalid',owner}],[409,{error:'Session unavailable.'}],[409,{code:'account_session_invalid',owner:other}],[409,{code:'account_session_invalid',owner,extra:true}],[409,{code:'other',owner}],[409,null],[409,[]]] as const){
+ const response=await accountStatus(browser(token),config,{fetch:async()=>Response.json(body,{status})});assert.equal(response.status,503);assert.equal(response.headers.get('set-cookie'),null);assert.equal(Object.hasOwn(await response.json(),'signedIn'),false);
+ }
+ const f=environment();try{
+ const status=await accountStatus(browser(token),config,f.deps);assert.equal(status.status,200);assert.equal((await status.json()).signedIn,false);assert.equal((await accountSecurity(browser(token),'history',config,f.deps)).status,401);assert.equal((await accountSecurity(browser(token,'POST',{confirm:true}),'revoke',config,f.deps)).status,401);
+ await f.service('sign-in','POST',{});
+ // A legitimate revocation race after the first version lookup retains browser-facing 401 behavior.
+ for(const action of ['history','revoke'] as const){
+ const request=action==='revoke'?browser(token,'POST',{confirm:true}):browser(token);
+ const response=await accountSecurity(request,action,config,{fetch:async(input,init)=>{if(!String(input).endsWith('/session'))return Response.json({code:'account_session_invalid',owner},{status:409});return f.deps.fetch(input,init);}});assert.equal(response.status,401);assert.equal(response.headers.get('set-cookie'),null);
+ }
  }finally{f.sqlite.close();}
 });

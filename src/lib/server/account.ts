@@ -28,7 +28,13 @@ export const accountUnavailable=()=>accountReply({error:'Account security is tem
 async function securityService(path:string,owner:string,c:AccountConfig,deps:AccountDeps={},body?:unknown,version?:number){
  try{
  const result=await(deps.fetch||fetch)(`${c.serviceUrl!.replace(/\/$/,'')}/account/${path}`,{method:body===undefined?'GET':'POST',headers:{Authorization:`Bearer ${c.secret}`,'x-qr-user':owner,'Content-Type':'application/json',...(version===undefined?{}:{'x-qr-session-version':String(version)})},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(5000),cache:'no-store'});
- if(result.status===401)return null;if(!result.ok)throw new Error();return await result.json();
+ // Never interpret service-bearer rejection (401) as a browser account transition.
+ if(result.status===409&&['session','history','revoke'].includes(path)){
+ const denial=await result.json();
+ if(denial&&typeof denial==='object'&&!Array.isArray(denial)&&Object.keys(denial).length===2&&denial.code==='account_session_invalid'&&denial.owner===owner)return null;
+ throw new Error('Invalid session denial');
+ }
+ if(!result.ok)throw new Error();return await result.json();
  }catch{throw new AccountUnavailable('Account security unavailable');}
 }
 async function signedSession(r:Request,c:AccountConfig){

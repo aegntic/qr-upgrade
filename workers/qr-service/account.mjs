@@ -4,6 +4,8 @@ const types=new Set(['sign_in','sign_out_everywhere','data_export','account_dele
 export const SECURITY_HISTORY_DAYS=30;
 export const SECURITY_HISTORY_LIMIT=100;
 const reply=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
+// 401 belongs to the dispatcher's service-bearer gate; this typed denial is emitted only after that gate.
+const invalidSession=owner=>reply({code:'account_session_invalid',owner},409);
 export async function readAccountBody(request){
  if(request.headers.get('content-type')?.split(';')[0]!=='application/json')throw new Error('JSON required');
  const reader=request.body?.getReader();if(!reader)throw new Error('Missing body');
@@ -31,16 +33,16 @@ export function securityCleanupStatements(env,now=Date.now()){return [
  env.DB.prepare('DELETE FROM account_security_events WHERE id IN (SELECT id FROM (SELECT id,ROW_NUMBER() OVER (PARTITION BY owner ORDER BY created_at DESC,id DESC) AS rank FROM account_security_events) WHERE rank>100)')
  ];}
 export async function accountRequest(request,env){
- const owner=request.headers.get('x-qr-user');if(!ownerPattern.test(owner||''))return reply({error:'Invalid owner.'},401);
+ const owner=request.headers.get('x-qr-user');if(!ownerPattern.test(owner||''))return reply({error:'Invalid owner.'},400);
  const path=new URL(request.url).pathname;
  if(path==='/account/session'&&request.method==='GET'){
  const row=await env.DB.prepare('SELECT owner,session_version FROM account_security WHERE owner=?').bind(owner).first();
- return row?reply({owner:row.owner,version:row.session_version}):reply({error:'Session unavailable.'},401);
+ return row?reply({owner:row.owner,version:row.session_version}):invalidSession(owner);
  }
  if(path==='/account/history'&&request.method==='GET'){
  const version=Number(request.headers.get('x-qr-session-version'));
- if(!Number.isSafeInteger(version)||version<1)return reply({error:'Invalid session.'},401);
- const row=await env.DB.prepare('SELECT owner FROM account_security WHERE owner=? AND session_version=?').bind(owner,version).first();if(!row)return reply({error:'Sign in again.'},401);
+ if(!Number.isSafeInteger(version)||version<1)return reply({error:'Invalid session.'},400);
+ const row=await env.DB.prepare('SELECT owner FROM account_security WHERE owner=? AND session_version=?').bind(owner,version).first();if(!row)return invalidSession(owner);
  const data=await env.DB.prepare('SELECT id,type,created_at FROM account_security_events WHERE owner=? AND created_at>=? ORDER BY created_at DESC,id DESC LIMIT 100').bind(owner,Date.now()-SECURITY_HISTORY_DAYS*86400000).all();
  return reply({events:data.results,retentionDays:SECURITY_HISTORY_DAYS,limit:SECURITY_HISTORY_LIMIT});
  }
@@ -64,5 +66,5 @@ export async function accountRequest(request,env){
  env.DB.prepare("INSERT INTO account_security_events(id,owner,type,created_at) SELECT ?,?,'sign_out_everywhere',? WHERE changes()=1").bind(eventId,owner,now),
  ...pruneOwner(env,owner,now)
  ]);
- return result[0].results.length?reply({revoked:true}):reply({error:'Sign in again.'},401);
+ return result[0].results.length?reply({revoked:true}):invalidSession(owner);
 }
