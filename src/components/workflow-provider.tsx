@@ -4,28 +4,32 @@ import {useRouter} from 'next/navigation';
 import type { EditorDraft, DesignArtifact } from '@/lib/editor-draft';
 import {contentDirty,linkDirty,newContentEditor,newLinkEditor,type ContentEditor,type LinkEditor} from '@/lib/service-drafts';
 import {SIGN_IN_DRAFT_KEY,encodeSignInDraft,decodeSignInDraft} from '@/lib/sign-in-drafts';
+import {ServiceEpochs,ServiceOperations} from '@/lib/service-operations';
 import {useDiscardDialog} from './discard-dialog';
-type Workflow = { contentEditor: ContentEditor; setContentEditor: Dispatch<SetStateAction<ContentEditor>>; linkEditor: LinkEditor; setLinkEditor: Dispatch<SetStateAction<LinkEditor>>; reconcileAccount: (owner:string|null)=>void; draft: EditorDraft | null; artifact: DesignArtifact | null; savedId?: string; setDesign: (draft: EditorDraft, artifact: DesignArtifact | null, savedId?: string) => void; clear: () => void };
+type Workflow = { epochs: ServiceEpochs; contentEditor: ContentEditor; setContentEditor: Dispatch<SetStateAction<ContentEditor>>; linkEditor: LinkEditor; setLinkEditor: Dispatch<SetStateAction<LinkEditor>>; reconcileAccount: (owner:string|null)=>void; draft: EditorDraft | null; artifact: DesignArtifact | null; savedId?: string; setDesign: (draft: EditorDraft, artifact: DesignArtifact | null, savedId?: string) => void; clear: () => void };
 const Context = createContext<Workflow | null>(null);
 export function WorkflowProvider({ children }: { children: ReactNode }) {
   const router=useRouter();
   const [value, setValue] = useState<{ draft: EditorDraft | null; artifact: DesignArtifact | null; savedId?: string }>({ draft: null, artifact: null });
-  const [contentEditor,setContentEditor]=useState(newContentEditor),[linkEditor,setLinkEditor]=useState(newLinkEditor);
+  const [contentEditor,updateContentEditor]=useState(newContentEditor),[linkEditor,updateLinkEditor]=useState(newLinkEditor);
+  const [epochs]=useState(()=>new ServiceEpochs());
+  const setContentEditor=useCallback<Dispatch<SetStateAction<ContentEditor>>>(next=>{epochs.edit('content');updateContentEditor(next);},[epochs]);
+  const setLinkEditor=useCallback<Dispatch<SetStateAction<LinkEditor>>>(next=>{epochs.edit('link');updateLinkEditor(next);},[epochs]);
   const owner=useRef<string|null|undefined>(undefined);
   const transfer=useRef<{read:boolean;raw:string|null}>({read:false,raw:null});
   const [recovered,setRecovered]=useState(false);
   const discard=useDiscardDialog();
-  const reconcileAccount=useCallback((nextOwner:string|null)=>{if(owner.current!==undefined&&owner.current!==nextOwner){setContentEditor(newContentEditor());setLinkEditor(newLinkEditor());try{sessionStorage.removeItem(SIGN_IN_DRAFT_KEY);}catch{}}owner.current=nextOwner;},[]);
+  const reconcileAccount=useCallback((nextOwner:string|null)=>{epochs.reconcile();transfer.current.raw=null;setRecovered(false);if(owner.current!==undefined&&owner.current!==nextOwner){setContentEditor(newContentEditor());setLinkEditor(newLinkEditor());try{sessionStorage.removeItem(SIGN_IN_DRAFT_KEY);}catch{}}owner.current=nextOwner;},[epochs,setContentEditor,setLinkEditor]);
   useEffect(()=>{
     if(!transfer.current.read){transfer.current.read=true;try{transfer.current.raw=sessionStorage.getItem(SIGN_IN_DRAFT_KEY);sessionStorage.removeItem(SIGN_IN_DRAFT_KEY);}catch{}}
     const raw=transfer.current.raw;if(!raw)return;
-    let active=true;
-    fetch('/api/account',{cache:'no-store'}).then(async response=>{if(!response.ok)throw new Error();return response.json();}).then(status=>{
-      if(!active)return;const nextOwner=status.signedIn?status.user.email:null,restored=decodeSignInDraft(raw!,nextOwner);
-      if(restored){owner.current=nextOwner;setContentEditor(restored.content);setLinkEditor(restored.link);setRecovered(true);transfer.current.raw=null;}
+    const operations=new ServiceOperations();operations.mount();const operation=operations.begin(epochs,'both');
+    fetch('/api/account',{cache:'no-store',signal:operation.signal}).then(async response=>{if(!response.ok)throw new Error();return response.json();}).then(status=>{
+      if(!operation.current())return;const nextOwner=status.signedIn?status.user.email:null,restored=decodeSignInDraft(raw!,nextOwner);
+      if(restored){reconcileAccount(nextOwner);setContentEditor(restored.content);setLinkEditor(restored.link);setRecovered(true);transfer.current.raw=null;}
     }).catch(()=>{});
-    return()=>{active=false;};
-  },[]);
+    return()=>{operations.unmount();};
+  },[epochs,reconcileAccount,setContentEditor,setLinkEditor]);
   const dirty=contentDirty(contentEditor)||linkDirty(linkEditor);
   useEffect(()=>{
     if(!dirty)return;
@@ -44,7 +48,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   },[dirty,discard.request,contentEditor,linkEditor]);
   const setDesign = useCallback((draft: EditorDraft, artifact: DesignArtifact | null, savedId?: string) => setValue({ draft, artifact, savedId }), []);
   const clear = useCallback(() => setValue({ draft: null, artifact: null }), []);
-  const state = useMemo(() => ({ ...value, setDesign, clear,contentEditor,setContentEditor,linkEditor,setLinkEditor,reconcileAccount }), [value, setDesign, clear,contentEditor,linkEditor,reconcileAccount]);
+  const state = useMemo(() => ({ ...value, epochs,setDesign, clear,contentEditor,setContentEditor,linkEditor,setLinkEditor,reconcileAccount }), [value, epochs,setDesign, clear,contentEditor,linkEditor,reconcileAccount,setContentEditor,setLinkEditor]);
   return <Context.Provider value={state}>{recovered&&<aside className="service-recovered" role="status">Your draft is back in this tab. Temporary sign-in storage has been cleared. <a href="/content" onClick={event=>{event.preventDefault();router.push('/content');}}>Open page draft</a> · <a href="/links" onClick={event=>{event.preventDefault();router.push('/links');}}>Open link draft</a> <button onClick={()=>setRecovered(false)} aria-label="Dismiss draft recovery message">Dismiss</button></aside>}{children}{discard.dialog}</Context.Provider>;
 }
 export function useWorkflow() { const state = useContext(Context); if (!state) throw new Error('WorkflowProvider is required.'); return state; }
