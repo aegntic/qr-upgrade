@@ -2,7 +2,7 @@
 
 ## Implemented core boundary (21 September 2026)
 
-The library model, native storage/image adapters and injected persistence engine exist. The Create/library UI, save identities, dirty/discard handling, session cleanup lifecycle, destination forms, workspace links and web PDF are separate tasks. Nothing automatically saves the current draft. This core is not yet a user-accessible library.
+The library model, native storage/image adapters, injected persistence engine and Create/library UI are integrated. Save identity, dirty/discard handling and owned image-session cleanup now live in the shared draft provider. Destination forms, workspace links and web PDF remain separate tasks. Nothing automatically saves the current draft.
 
 Native storage uses `Paths.document/qrupgrade-library-v1/<UUID>/<generation>.qru`. `QRUL1|1|<UUID>|<generation>\n` is authenticated as AES-GCM AAD; the sealed bytes contain a fresh 12-byte nonce and 16-byte tag. All title/destination/settings/image bytes are encrypted together with a generated 256-bit installation key. SecureStore stores only the 64-character hex key, using the fixed `qrupgrade.local-library.key.v1` service and item, `WHEN_UNLOCKED_THIS_DEVICE_ONLY`, and `requireAuthentication: false`. The accessibility choice is an iOS keychain setting; do not claim a separate Android locked-device authentication gate.
 
@@ -11,6 +11,16 @@ This is private encrypted storage, not an app lock. An unlocked app can open sav
 Android introspection must keep `allowBackup=false` and `fullBackupContent=false`. The SecureStore plugin is configured with `configureAndroidBackup: false` and `faceIDPermission: false` to preserve existing security settings. iOS file sharing and opening documents in place stay disabled/absent. Encrypted iOS document files may enter OS backups; the device-only key may not survive migration, making restored files unreadable. No verified iOS backup-exclusion API is applied. The existing encryption/export declaration must be reviewed against the final build before distribution; this implementation does not establish a legal classification.
 
 ## UI integration contract
+
+Implemented UI behavior (21 September 2026):
+
+- Create exposes `Save on this device`, `Save changes` and the disabled confirmation state `Saved on this device`. New saves use a keyboard-aware title dialog. The click handler copies the entire editable draft before normalization; authenticated final readback must finish before the saved identity or clean baseline changes.
+- Library rows show title, destination type, saved time and status only. They never render QR thumbnails, payloads, passwords, contact snippets or image previews. Native action sheets/dialogs provide open, rename and confirmed delete; damaged records can explicitly recover their immediately previous copy as an unsaved draft.
+- A validation-free editable fingerprint tracks invalid in-progress edits. Reopen first materializes every image into a new owned session, rejects stale requests, then replaces the whole draft, increments the render epoch and clears generated/verification state. Verification identity includes that epoch; delayed Scan Lab and Export producers must present the current identity, and the provider rejects an older callback even when regenerated SVG bytes are equal. A failed or stale reopen leaves the current draft and verification unchanged.
+- Deleting the currently open row detaches its saved identity but leaves its draft and image session usable as an unsaved copy. A post-tombstone cleanup rejection triggers an authoritative list reconciliation: a `deleting` or absent row detaches, while an unchanged authenticated saved row retains its identity. Uncertain destructive results are presented as unsaved rather than asserted saved. A reset that removed records but failed key cleanup follows the same rule and keeps an explicit cleanup retry action.
+- Retired sessions are released only after asynchronous artwork, scene and save-normalization consumers plus the UI transition settle. Save acquires its session lease synchronously before asset normalization yields and releases it in `finally`. Provider unmount/reset follows the same owned-session path; picker originals and durable ciphertext are outside it.
+- Storage errors retain the current draft and expose retry. Missing or malformed key state adds a separately confirmed `Delete inaccessible local saves` action. Web shows the typed unsupported explanation and does not invoke list/save/open or browser persistence.
+- Shared controls now use obsidian surfaces, steel text/borders and cool backlit accents in dark mode, with a readable cool-neutral light counterpart. User-selected artwork and QR output colors remain unchanged.
 
 1. Call `purgeStaleLibraryImageCache()` once on cold startup, before creating any saved-design working session or starting renders that consume one. It deletes only `qrupgrade-working` and `qrupgrade-normalizing` under private cache. Never call this purge during a live session.
 2. At explicit Save click, copy the current editable draft, including nested content/appearance. Normalize that same captured draft with `captureLibraryAssets()`, then pass the captured draft and returned assets to `localLibrary.save()`. A new save has no ID; changes require the saved ID and `expectedGeneration`. Busy/conflicting controls belong to the UI. Edits made during normalization/save must not be marked clean unless they still match the captured values.
@@ -43,10 +53,11 @@ Use exact Node 22.23.2 (the checked-in `.nvmrc`). From repository root:
 
 ```sh
 PATH=/home/ae/.local/share/mise/installs/node/22.23.2/bin:$PATH node --import tsx --test --test-reporter=spec tests/native-library.test.ts
+PATH=/home/ae/.local/share/mise/installs/node/22.23.2/bin:$PATH node --import tsx --test --test-reporter=spec tests/native-library-ui.test.ts
 PATH=/home/ae/.local/share/mise/installs/node/22.23.2/bin:$PATH npm --prefix mobile run typecheck
 ```
 
-For the core-only preflight, create a temporary `mobile/src/.local-library-preflight.ts` exporting `localLibrary` from `./local-library` and all helpers from `./local-library-images`. From `mobile`, bundle it independently of the not-yet-wired screens, then remove the temporary entry:
+For a core-only preflight, create a temporary `mobile/src/.local-library-preflight.ts` exporting `localLibrary` from `./local-library` and all helpers from `./local-library-images`. From `mobile`, bundle it independently, then remove the temporary entry:
 
 ```sh
 npx expo export:embed --entry-file src/.local-library-preflight.ts --platform android --dev false --minify false --max-workers 2 --bundle-output /tmp/qrupgrade-native-library-20260921.android.js
@@ -54,7 +65,16 @@ npx expo export:embed --entry-file src/.local-library-preflight.ts --platform io
 npx expo config --type introspect --json > /tmp/qrupgrade-native-library-20260921-config.json
 ```
 
-These exports validate native JavaScript dependency resolution, not Hermes execution, native AES/Keychain/Keystore execution, installed-app storage, or device crash durability. The injected Node crypto adapter is used only in tests. After UI integration, root must run the whole mobile Android/iOS/web export graph and fresh platform builds.
+These exports validate native JavaScript dependency resolution, not Hermes execution, native AES/Keychain/Keystore execution, installed-app storage, or device crash durability. The injected Node crypto adapter is used only in tests. Root must still run fresh platform builds and device checks.
+
+The integrated source graph can be checked without writing build output into the repository:
+
+```sh
+QR_EXPORT_DIR=$(mktemp -d /tmp/qrupgrade-native-library-ui.XXXXXX)
+PATH=/home/ae/.local/share/mise/installs/node/22.23.2/bin:$PATH npx expo export --platform all --output-dir "$QR_EXPORT_DIR" --clear
+```
+
+The final 21 September 2026 integration export succeeded for Android, iOS, the web client, and all seven static routes including `/library`. This establishes dependency and route bundling only; it is not installed-app or device execution.
 
 ## Required actual runtime evidence after UI integration
 

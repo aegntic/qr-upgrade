@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Text, View, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import Svg from "react-native-svg";
@@ -21,40 +21,64 @@ export default function Export() {
     ref = useRef<Svg>(null);
   const [format, setFormat] = useState<"png" | "pdf">("png"),
     [busy, setBusy] = useState(false),
-    [message, setMessage] = useState("");
+    [message, setMessage] = useState(""),
+    mounted = useRef(true),
+    currentKey = useRef(key);
+  currentKey.current = key;
+  useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    [],
+  );
   const available = report.score === 100 && !!generated.svg;
   async function save() {
     if (!available || busy) return;
+    const checkKey = key;
+    const expected = generated.text;
+    const svg = generated.svg;
+    const sizeMm = draft.sizeMm;
     setBusy(true);
     setMessage("");
     try {
       const pixels = Math.min(
         6000,
-        Math.max(1024, Math.ceil((draft.sizeMm / 25.4) * 300)),
+        Math.max(1024, Math.ceil((sizeMm / 25.4) * 300)),
       );
       const png = await capture(ref, pixels);
-      const ok = await decodePng(png, generated.text);
-      setVerification({
-        key,
+      const ok = await decodePng(png, expected);
+      if (!mounted.current) return;
+      if (currentKey.current !== checkKey) {
+        setMessage("The design changed while export was prepared. Try again.");
+        return;
+      }
+      const accepted = setVerification({
+        key: checkKey,
         ok,
         message: ok ? "Export read-back passed." : "Export read-back failed.",
       });
+      if (!accepted) {
+        setMessage("The design changed while export was prepared. Try again.");
+        return;
+      }
       if (!ok)
         throw new Error(
           "This QR did not decode. Return to Scan Lab and increase scan strength or repair scanability.",
         );
-      await exportFile(format, generated.svg, png, draft.sizeMm);
-      setMessage(
-        Platform.OS === "web"
-          ? "Download started."
-          : "Share sheet closed. Check your chosen destination for the file.",
-      );
+      await exportFile(format, svg, png, sizeMm);
+      if (mounted.current && currentKey.current === checkKey)
+        setMessage(
+          Platform.OS === "web"
+            ? "Download started."
+            : "Share sheet closed. Check your chosen destination for the file.",
+        );
     } catch (e) {
-      setMessage(
-        e instanceof Error ? e.message : "Export failed. Please try again.",
-      );
+      if (mounted.current)
+        setMessage(
+          e instanceof Error ? e.message : "Export failed. Please try again.",
+        );
     } finally {
-      setBusy(false);
+      if (mounted.current) setBusy(false);
     }
   }
   return (

@@ -6,6 +6,7 @@ import { artworkAssets } from "../src/artwork-assets";
 import { useRouter } from "expo-router";
 import { View, Text, Pressable, Image } from "react-native";
 import { useDraft } from "../src/draft";
+import { LibraryTitleDialog } from "../src/library-title-dialog";
 import {
   Button,
   Card,
@@ -19,13 +20,29 @@ import {
 } from "../src/ui";
 import { Symbol } from "../src/symbol";
 export default function Create() {
-  const { draft, content, appearance, patch, generated, reset } = useDraft(),
+  const {
+      draft,
+      content,
+      appearance,
+      patch,
+      generated,
+      reset,
+      savedIdentity,
+      hasUnsavedChanges,
+      libraryBusy,
+      localLibrarySupported,
+      saveCurrent,
+    } = useDraft(),
     router = useRouter(),
     t = useTheme();
   const [uploadError, setUploadError] = useState("");
+  const [saveMessage, setSaveMessage] = useState("");
+  const [titleOpen, setTitleOpen] = useState(false);
   const sequence = useRef(0);
+  const mounted = useRef(true);
   useEffect(
     () => () => {
+      mounted.current = false;
       sequence.current++;
     },
     [],
@@ -54,8 +71,49 @@ export default function Create() {
         );
     }
   }
+  async function save(title?: string) {
+    setSaveMessage("");
+    try {
+      await saveCurrent(title);
+      if (!mounted.current) return;
+      setTitleOpen(false);
+      setSaveMessage("Saved on this device.");
+    } catch (e) {
+      if (!mounted.current) return;
+      setSaveMessage(
+        e instanceof Error ? e.message : "This design could not be saved.",
+      );
+    }
+  }
+  const saveLabel = !localLibrarySupported
+    ? "Private saves need the mobile app"
+    : libraryBusy
+      ? libraryBusy
+      : savedIdentity
+        ? hasUnsavedChanges
+          ? "Save changes"
+          : "Saved on this device"
+        : "Save on this device";
   return (
     <Page>
+      <View style={{ alignItems: "flex-end" }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open saved design library"
+          onPress={() => router.push("/library")}
+          style={({ pressed }) => ({
+            minHeight: 44,
+            justifyContent: "center",
+            paddingHorizontal: 14,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: t.line,
+            backgroundColor: pressed ? t.panelRaised : t.panel,
+          })}
+        >
+          <Text style={{ color: t.ink, fontWeight: "700" }}>Library</Text>
+        </Pressable>
+      </View>
       <Heading
         step="01 / CREATE"
         title="Make your image the QR."
@@ -85,6 +143,39 @@ export default function Create() {
             {draft.brand || "YOUR BRAND"}
           </Text>
         </View>
+      </Card>
+      <Card>
+        <Copy size={13}>Private device library</Copy>
+        <Button
+          title={saveLabel}
+          disabled={!!libraryBusy || (!!savedIdentity && !hasUnsavedChanges)}
+          onPress={() => {
+            if (!localLibrarySupported) {
+              router.push("/library");
+            } else if (savedIdentity) {
+              void save();
+            } else {
+              setSaveMessage("");
+              setTitleOpen(true);
+            }
+          }}
+        />
+        {saveMessage ? (
+          <Text
+            accessibilityRole={saveMessage.startsWith("Saved") ? "text" : "alert"}
+            style={{
+              color: saveMessage.startsWith("Saved") ? t.success : t.error,
+            }}
+          >
+            {saveMessage}
+          </Text>
+        ) : null}
+        <Copy muted size={12}>
+          Saved designs stay in this app on this device. They can include Wi-Fi
+          passwords and contact details. They are not a backup or a cloud save.
+          Selected images are saved as normalized app copies, not full-resolution
+          originals.
+        </Copy>
       </Card>
       <Choices
         label="QR content"
@@ -266,9 +357,11 @@ export default function Create() {
       <Button
         title="Clear this draft"
         secondary
+        disabled={!!libraryBusy}
         onPress={() => {
           sequence.current++;
           setUploadError("");
+          setSaveMessage("");
           reset();
         }}
       />
@@ -277,6 +370,19 @@ export default function Create() {
         app restarts. Choose an AI-created example or your own image. Live
         text-to-image generation is not connected yet.
       </Copy>
+      <LibraryTitleDialog
+        visible={titleOpen}
+        heading="Save on this device"
+        initialValue={draft.brand === "Your Brand Here." ? "" : draft.brand}
+        busy={!!libraryBusy}
+        errorMessage={
+          saveMessage && !saveMessage.startsWith("Saved") ? saveMessage : ""
+        }
+        onCancel={() => {
+          if (!libraryBusy) setTitleOpen(false);
+        }}
+        onSave={(title) => void save(title)}
+      />
     </Page>
   );
 }

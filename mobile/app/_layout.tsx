@@ -20,6 +20,7 @@ export default function Layout() {
           }}
         >
           <Stack.Screen name="index" options={{ title: "QR upgrade ↗" }} />
+          <Stack.Screen name="library" options={{ title: "Library" }} />
           <Stack.Screen name="test" options={{ title: "Scan Lab" }} />
           <Stack.Screen name="export" options={{ title: "Export" }} />
           <Stack.Screen

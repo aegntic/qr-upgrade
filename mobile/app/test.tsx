@@ -33,6 +33,7 @@ export default function Test() {
       setVerification,
       key,
       verified,
+      retainLibraryImageSession,
     } = useDraft(),
     router = useRouter(),
     t = useTheme();
@@ -49,6 +50,10 @@ export default function Test() {
       mounted.current = false;
     };
   }, []);
+  useEffect(() => {
+    if (!draft.photo) return;
+    return retainLibraryImageSession();
+  }, [draft.photo]);
   const check = async () => {
     const checkKey = key,
       expected = generated.text;
