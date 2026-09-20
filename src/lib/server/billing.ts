@@ -124,7 +124,7 @@ export async function billingAction(r:Request,action:'checkout'|'portal',c=billi
    // Never discard an ambiguous create. Replay the exact request with its stored key.
    // After 23 hours Stripe may evict a key; require operator reconciliation instead.
    if(Date.now()/1000-b.reserved_at>23*3600)throw new Error('Reconciliation required');
-   try {session=await s.checkout.sessions.create({mode:'subscription',customer:b.customer_id,line_items:[{price:c[b.tier]!,quantity:1}],metadata:{owner:user.id},subscription_data:{metadata:{owner:user.id}},success_url:`${accountOrigin(c.account)}/billing?checkout=returned`,cancel_url:`${accountOrigin(c.account)}/billing?checkout=cancelled`,expires_at:b.reserved_at+1860},{idempotencyKey:`qr-checkout-${mode(c)}-${user.id}-${b.reservation}`});
+   try {session=await s.checkout.sessions.create({mode:'subscription',customer:b.customer_id,line_items:[{price:c[b.tier]!,quantity:1}],branding_settings:{display_name:'QR Upgrade',icon:{type:'url',url:'https://qrupgrade.com/brand/qr-upgrade-logo-v3-256.png'}},metadata:{owner:user.id},subscription_data:{metadata:{owner:user.id}},success_url:`${accountOrigin(c.account)}/billing?checkout=returned`,cancel_url:`${accountOrigin(c.account)}/billing?checkout=cancelled`,expires_at:b.reserved_at+1860},{idempotencyKey:`qr-checkout-${mode(c)}-${user.id}-${b.reservation}`});
    }catch(error){
     // Only Stripe's definitive parameter rejection proves this replay did not execute.
     // Network errors, 5xx and idempotency conflicts remain uncertain and keep the key.

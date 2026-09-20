@@ -29,6 +29,19 @@ function fixture(){
  return {env,s,subs,sessions,portalSessions,deps:{stripe:s as unknown as Stripe,fetch:fetcher},get creates(){return creates;},get portalReads(){return portalReads;}};
 }
 async function browser(body:unknown={tier:'pro'},origin='http://localhost:3040'){const token=await signAccountToken({sv:1,sub:owner,name:'Fixture',email:'fixture@example.com'},'session',c.account);return new Request('http://localhost:3040/api/billing/checkout',{method:'POST',headers:{origin,cookie:`qr-session=${token}`,'Content-Type':'application/json'},body:JSON.stringify(body)});}
+test('checkout applies QR Upgrade branding only to its own session and retains it on retry',async()=>{
+ const f=fixture(),create=f.s.checkout.sessions.create;const requests:Stripe.Checkout.SessionCreateParams[]=[];
+ f.s.checkout.sessions.create=async(params,options)=>{requests.push(params);await create(params,options);throw new Error('ambiguous provider response');};
+ try{
+  assert.equal((await billingAction(await browser(),'checkout',c,f.deps)).status,503);
+  f.env.sqlite.prepare('UPDATE billing_customers SET lease_until=0').run();
+  assert.equal((await billingAction(await browser(),'checkout',c,f.deps)).status,503);
+  assert.equal(requests.length,2);
+  assert.deepEqual(requests[0].branding_settings,{display_name:'QR Upgrade',icon:{type:'url',url:'https://qrupgrade.com/brand/qr-upgrade-logo-v3-256.png'}});
+  assert.deepEqual(requests[1],requests[0]);
+  assert.equal(f.portalSessions.length,0);
+ }finally{f.env.sqlite.close();}
+});
 test('disabled readiness and anonymous offers; bad configured prices and network fail closed',async()=>{const f=fixture();assert.equal(billingReady({...c,brand:c.pro}),false);const off=await billingStatus(req(),{...c,enabled:false},f.deps);assert.deepEqual(await off.json(),{configured:false,signedIn:false,plans:[],subscription:null,canManage:false,entitlement:{tier:'free',limits:PLAN_LIMITS.free}});const on=await(await billingStatus(req(),c,f.deps)).json();assert.equal(on.plans[0].amount,1200);assert.equal(on.signedIn,false);f.s.prices.retrieve=async()=>{throw new Error('private');};assert.equal((await billingStatus(req(),c,f.deps)).status,503);f.env.sqlite.close();});
 test('billing readiness requires a dedicated portal configuration identifier',()=>{
  assert.equal(billingReady({...c,portalConfiguration:undefined}),false);
