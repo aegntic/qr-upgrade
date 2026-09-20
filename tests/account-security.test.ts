@@ -1,3 +1,4 @@
+import {migrate} from './fixtures/migrations';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
@@ -12,10 +13,10 @@ import {billingAction,billingStatus} from '../src/lib/server/billing';
 const config:AccountConfig={clientId:'fixture.apps.googleusercontent.com',clientSecret:'fixture',secret:'s'.repeat(64),serviceUrl:'https://service.example',development:true};
 const owner=createHash('sha256').update('google:verified-subject').digest('hex'),other='b'.repeat(64);
 function environment(){
- const sqlite=new DatabaseSync(':memory:');sqlite.exec(readFileSync(new URL('../workers/qr-service/migrations/0006_account_security.sql',import.meta.url),'utf8'));
+ const sqlite=new DatabaseSync(':memory:');migrate(sqlite);
  const wrap=(sql:string,params:any[]=[])=>({bind:(...values:any[])=>wrap(sql,values),first:async()=>sqlite.prepare(sql).get(...params)||null,all:async()=>({results:sqlite.prepare(sql).all(...params)}),run:async()=>sqlite.prepare(sql).run(...params),sql,params});
  const DB={prepare:wrap,async batch(statements:ReturnType<typeof wrap>[]){sqlite.exec('BEGIN');try{const result=statements.map(s=>({results:sqlite.prepare(s.sql).all(...s.params)}));sqlite.exec('COMMIT');return result;}catch(error){sqlite.exec('ROLLBACK');throw error;}}};
- const env={DB,SERVICE_SECRET:config.secret},deps={fetch:async(input:RequestInfo|URL,init?:RequestInit)=>worker.fetch(new Request(String(input),init),env,{waitUntil(){}})};
+ const env={DB,SERVICE_SECRET:config.secret,ASSETS:{}},deps={fetch:async(input:RequestInfo|URL,init?:RequestInit)=>worker.fetch(new Request(String(input),init),env,{waitUntil(){}})};
  const service=(path:string,method='GET',body?:unknown,user=owner)=>deps.fetch(config.serviceUrl+'/account/'+path,{method,headers:{Authorization:`Bearer ${config.secret}`,'x-qr-user':user,'x-qr-session-version':'1','Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
  return {sqlite,DB,env,deps,service};
 }

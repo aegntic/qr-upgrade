@@ -1,3 +1,4 @@
+import {migrate} from './fixtures/migrations';
 import {validAccountDeps} from './fixtures/account-deps';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -9,7 +10,7 @@ import {signAccountToken,type AccountConfig} from '../src/lib/server/account';
 const owner='a'.repeat(64),other='b'.repeat(64);
 const config:AccountConfig={clientId:'test',clientSecret:'test',secret:'s'.repeat(64),serviceUrl:'https://service.example',development:true};
 function database(){
- const sqlite=new DatabaseSync(':memory:');sqlite.exec(readFileSync(new URL('../workers/qr-service/migrations/0003_links.sql',import.meta.url),'utf8'));
+ const sqlite=new DatabaseSync(':memory:');migrate(sqlite);
  const wrap=(sql:string,params:any[]=[])=>({bind:(...p:any[])=>wrap(sql,p),first:async()=>sqlite.prepare(sql).get(...params)||null,all:async()=>({results:sqlite.prepare(sql).all(...params)}),sql,params});
  return {sqlite,DB:{prepare:wrap,async batch(statements:ReturnType<typeof wrap>[]){sqlite.exec('BEGIN');try{const results=statements.map(s=>({results:sqlite.prepare(s.sql).all(...s.params)}));sqlite.exec('COMMIT');return results;}catch(e){sqlite.exec('ROLLBACK');throw e;}}}};
 }

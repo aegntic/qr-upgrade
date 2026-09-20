@@ -125,7 +125,7 @@ export async function accountExportRequest(request,env){
  if(!(url.pathname==='/account/export'&&request.method==='POST')&&!(file&&request.method==='GET'))return reply({error:'Not found.'},404);
  let input;
  if(!file)try{input=validateExportInput(await readAccountBody(request));}catch{return reply({error:'Choose a supported export section and cursor.'},400);}
- const current=await env.DB.prepare('SELECT owner FROM account_security WHERE owner=? AND session_version=?').bind(owner,Number(versionText)).first();
+ const current=await env.DB.prepare("SELECT owner FROM account_security WHERE owner=? AND session_version=? AND lifecycle='active'").bind(owner,Number(versionText)).first();
  if(!current)return reply({code:'account_session_invalid',owner},409);
  if(file)return prepareFile(env,owner,file[1],file[2]);
  let page;

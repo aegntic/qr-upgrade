@@ -1,3 +1,4 @@
+import {migrate} from './fixtures/migrations';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
@@ -17,13 +18,13 @@ const snapshot=()=>({name:'Fixture',draft:newDesign('https://qrupgrade.com/','Fi
 type Stored={bytes:Uint8Array;size?:number;failure?:boolean};
 function fixture(){
  const sqlite=new DatabaseSync(':memory:');
- for(const name of ['0001_art_jobs','0002_accounts','0003_links','0004_content','0005_billing','0006_account_security'])sqlite.exec(readFileSync(new URL(`../workers/qr-service/migrations/${name}.sql`,import.meta.url),'utf8'));
+ migrate(sqlite);
  const queries:string[]=[],objects=new Map<string,Stored>(),reads:string[]=[];
  const wrap=(sql:string,params:any[]=[])=>({bind:(...values:any[])=>wrap(sql,values),first:async()=>{queries.push(sql);return sqlite.prepare(sql).get(...params)||null;},all:async()=>{queries.push(sql);return {results:sqlite.prepare(sql).all(...params)};},run:async()=>sqlite.prepare(sql).run(...params),sql,params});
  const DB={prepare:wrap,async batch(statements:ReturnType<typeof wrap>[]){sqlite.exec('BEGIN');try{const results=statements.map(s=>({results:sqlite.prepare(s.sql).all(...s.params)}));sqlite.exec('COMMIT');return results;}catch(error){sqlite.exec('ROLLBACK');throw error;}}};
  const env={DB,SERVICE_SECRET:config.secret,ASSETS:{async get(key:string){reads.push(key);const stored=objects.get(key);if(!stored)return null;if(stored.failure)throw new Error('private bucket error');return {size:stored.size??stored.bytes.byteLength,body:new Response(new Uint8Array(stored.bytes)).body};}}};
  const paths:string[]=[],deps:AccountDeps={fetch:async(input,init)=>{paths.push(new URL(String(input)).pathname);return worker.fetch(new Request(String(input),init),env,{waitUntil(){}});}};
- sqlite.prepare('INSERT INTO account_security VALUES(?,1)').run(owner);sqlite.prepare('INSERT INTO account_security VALUES(?,1)').run(other);
+ sqlite.prepare('INSERT INTO account_security(owner,session_version) VALUES(?,1)').run(owner);sqlite.prepare('INSERT INTO account_security(owner,session_version) VALUES(?,1)').run(other);
  function design(n:number,user=owner,ready=1){sqlite.prepare('INSERT INTO cloud_designs VALUES(?,?,?,?,?,?,?,?)').run(id(n),user,user===owner?'Owned design':'FOREIGN_PRIVATE',n%2,date,date,`private/${user}/${n}`,ready);}
  function asset(n:number,user=owner,ready=1){sqlite.prepare('INSERT INTO content_assets VALUES(?,?,?,?,?,?,?,?)').run(id(n),user,user===owner?'../../unsafe.html':'FOREIGN_PRIVATE','image/png',1,`private/${user}/${n}`,ready,date);}
  function page(n:number,user=owner){sqlite.prepare('INSERT INTO content_pages VALUES(?,?,?,?,?,?,?,?,?)').run(id(n),user,String(n).padStart(16,'0'),JSON.stringify(draft),JSON.stringify({...draft,title:'Published version'}),'published',1,date,date);}
@@ -51,7 +52,7 @@ test('production proxy/dispatcher exports fixed sections across owners, archived
   for(let link=1;link<=2;link++)for(let day=1;day<=31;day++)f.sqlite.prepare('INSERT INTO link_daily_counts VALUES(?,?,?)').run(String(link).padStart(16,'0'),`2026-08-${String(day).padStart(2,'0')}`,day);
   f.sqlite.prepare('INSERT INTO link_daily_counts VALUES(?,?,?)').run('0000000000000900','2026-08-01',900);
   for(const user of [owner,other]){
-   const customer=user===owner?'cus_owned':'cus_FOREIGN_PRIVATE';f.sqlite.prepare('INSERT INTO billing_customers VALUES(?,?,?,?,?,?,?,?)').run(user,customer,'test','reservation-secret','brand',100,'checkout-secret',200);
+   const customer=user===owner?'cus_owned':'cus_FOREIGN_PRIVATE';f.sqlite.prepare('INSERT INTO billing_customers(owner,customer_id,mode,reservation,tier,reserved_at,session_id,lease_until) VALUES(?,?,?,?,?,?,?,?)').run(user,customer,'test','reservation-secret','brand',100,'checkout-secret',200);
    for(let n=1;n<=61;n++)f.sqlite.prepare('INSERT INTO billing_events VALUES(?,?,?,?,?,?)').run(`evt_${user===owner?'owned':'foreign'}_${String(n).padStart(4,'0')}`,'checkout.session.completed',100,customer,'sub_fixture','test');
   }
   for(let n=1;n<=61;n++)f.sqlite.prepare('INSERT INTO account_security_events VALUES(?,?,?,?)').run(id(n),owner,'sign_in',Date.now()-10000);

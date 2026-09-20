@@ -36,13 +36,13 @@ export async function accountRequest(request,env){
  const owner=request.headers.get('x-qr-user');if(!ownerPattern.test(owner||''))return reply({error:'Invalid owner.'},400);
  const path=new URL(request.url).pathname;
  if(path==='/account/session'&&request.method==='GET'){
- const row=await env.DB.prepare('SELECT owner,session_version FROM account_security WHERE owner=?').bind(owner).first();
+ const row=await env.DB.prepare("SELECT owner,session_version FROM account_security WHERE owner=? AND lifecycle='active'").bind(owner).first();
  return row?reply({owner:row.owner,version:row.session_version}):invalidSession(owner);
  }
  if(path==='/account/history'&&request.method==='GET'){
  const version=Number(request.headers.get('x-qr-session-version'));
  if(!Number.isSafeInteger(version)||version<1)return reply({error:'Invalid session.'},400);
- const row=await env.DB.prepare('SELECT owner FROM account_security WHERE owner=? AND session_version=?').bind(owner,version).first();if(!row)return invalidSession(owner);
+ const row=await env.DB.prepare("SELECT owner FROM account_security WHERE owner=? AND session_version=? AND lifecycle='active'").bind(owner,version).first();if(!row)return invalidSession(owner);
  const data=await env.DB.prepare('SELECT id,type,created_at FROM account_security_events WHERE owner=? AND created_at>=? ORDER BY created_at DESC,id DESC LIMIT 100').bind(owner,Date.now()-SECURITY_HISTORY_DAYS*86400000).all();
  return reply({events:data.results,retentionDays:SECURITY_HISTORY_DAYS,limit:SECURITY_HISTORY_LIMIT});
  }
@@ -53,16 +53,16 @@ export async function accountRequest(request,env){
  if(Object.keys(body).length)return reply({error:'Invalid request.'},400);
  // This registration path is called exclusively after successful Google verification.
  const result=await env.DB.batch([
- env.DB.prepare('INSERT INTO account_security(owner,session_version) VALUES(?,1) ON CONFLICT(owner) DO UPDATE SET session_version=account_security.session_version RETURNING owner,session_version').bind(owner),
- env.DB.prepare("INSERT INTO account_security_events(id,owner,type,created_at) VALUES(?,?,'sign_in',?)").bind(eventId,owner,now),
+ env.DB.prepare("INSERT INTO account_security(owner,session_version) VALUES(?,1) ON CONFLICT(owner) DO UPDATE SET session_version=account_security.session_version WHERE account_security.lifecycle='active' RETURNING owner,session_version").bind(owner),
+ env.DB.prepare("INSERT INTO account_security_events(id,owner,type,created_at) SELECT ?,?,'sign_in',? WHERE changes()=1").bind(eventId,owner,now),
  ...pruneOwner(env,owner,now)
  ]);
- const row=result[0].results[0];return reply({owner:row.owner,version:row.session_version});
+ const row=result[0].results[0];if(!row)return reply({code:'account_closed',owner},409);return reply({owner:row.owner,version:row.session_version});
  }
  if(Object.keys(body).length!==1||!Number.isSafeInteger(body.version)||body.version<1||body.version>=Number.MAX_SAFE_INTEGER)return reply({error:'Invalid request.'},400);
  // Compare-and-increment and its event share a transaction. A replay cannot bump or restore access.
  const result=await env.DB.batch([
- env.DB.prepare('UPDATE account_security SET session_version=session_version+1 WHERE owner=? AND session_version=? RETURNING session_version').bind(owner,body.version),
+ env.DB.prepare("UPDATE account_security SET session_version=session_version+1 WHERE owner=? AND session_version=? AND lifecycle='active' RETURNING session_version").bind(owner,body.version),
  env.DB.prepare("INSERT INTO account_security_events(id,owner,type,created_at) SELECT ?,?,'sign_out_everywhere',? WHERE changes()=1").bind(eventId,owner,now),
  ...pruneOwner(env,owner,now)
  ]);

@@ -1,3 +1,4 @@
+import {migrate} from './fixtures/migrations';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import Stripe from 'stripe';
@@ -9,7 +10,7 @@ import {PLAN_LIMITS} from '../shared/plan-limits.mjs';
 import {signAccountToken} from '../src/lib/server/account';
 const owner='a'.repeat(64),other='b'.repeat(64);
 const c:BillingConfig={enabled:true,key:'sk_test_fixture',webhookSecret:'whsec_fixture',pro:'price_pro',brand:'price_brand',portalConfiguration:'bpc_qrupgrade',account:{clientId:'test',clientSecret:'test',secret:'s'.repeat(64),serviceUrl:'https://service.example',development:true}};
-function db(){const sqlite=new DatabaseSync(':memory:');sqlite.exec(readFileSync(new URL('../workers/qr-service/migrations/0005_billing.sql',import.meta.url),'utf8'));const wrap=(sql:string,values:any[]=[])=>({bind:(...v:any[])=>wrap(sql,v),first:async()=>sqlite.prepare(sql).get(...values)||null});return {sqlite,DB:{prepare:wrap}};}
+function db(){const sqlite=new DatabaseSync(':memory:');migrate(sqlite);const wrap=(sql:string,values:any[]=[])=>({bind:(...v:any[])=>wrap(sql,v),first:async()=>sqlite.prepare(sql).get(...values)||null,run:async()=>sqlite.prepare(sql).run(...values)});return {sqlite,DB:{prepare:wrap}};}
 function req(path='/billing',method='GET',body?:unknown,user=owner){return new Request('https://service.example'+path,{method,headers:{'x-qr-user':user,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});}
 function fixture(){
  const env=db();let creates=0,portalReads=0;const sessions=new Map<string,any>(),portalSessions:any[]=[];const subs:any[]=[];
@@ -226,4 +227,16 @@ test('restricted Stripe keys preserve their explicit test or live mode',async()=
 test('deliberately disabled billing returns free without provider access',async()=>{
  const deps={stripe:new Proxy({} as Stripe,{get(){throw new Error('provider accessed');}}),fetch:async()=>{throw new Error('service accessed');}};
  assert.deepEqual(await resolveEntitlement(owner,{...c,enabled:false,key:undefined,webhookSecret:undefined},deps),{tier:'free',limits:PLAN_LIMITS.free});
+});
+test('customer creation uses durable reservation and retains exact idempotency across an uncertain response',async()=>{
+ const f=fixture(),create=f.s.customers.create,keys:string[]=[];let failed=false;
+ f.s.customers.create=(async(_input:unknown,options:{idempotencyKey:string})=>{keys.push(options.idempotencyKey);const row=f.env.sqlite.prepare('SELECT * FROM billing_customer_creations WHERE owner=?').get(owner);assert.ok(row?.token);if(!failed){failed=true;throw new Error('customer response lost');}return create();}) as typeof create;
+ assert.equal((await billingAction(await browser(),'checkout',c,f.deps)).status,503);const pending=f.env.sqlite.prepare('SELECT * FROM billing_customer_creations').get()!;assert.ok(pending.token);assert.equal(f.env.sqlite.prepare('SELECT count(*) n FROM billing_customers').get()!.n,0);
+ assert.equal((await billingAction(await browser(),'checkout',c,f.deps)).status,200);assert.equal(keys.length,2);assert.equal(keys[0],keys[1]);assert.equal(f.env.sqlite.prepare('SELECT count(*) n FROM billing_customer_creations').get()!.n,0);f.env.sqlite.close();
+});
+test('definitive customer metadata rejection releases its exact reservation; old uncertainty never starts a new provider create',async()=>{
+ const known=fixture();known.s.customers.create=async()=>{throw new Stripe.errors.StripeInvalidRequestError({message:'Invalid metadata',type:'invalid_request_error',param:'metadata[owner]',statusCode:400,requestId:'req_fixture'});};
+ assert.equal((await billingAction(await browser(),'checkout',c,known.deps)).status,503);assert.equal(known.env.sqlite.prepare('SELECT count(*) n FROM billing_customer_creations').get()!.n,0);known.env.sqlite.close();
+ const stale=fixture();stale.env.sqlite.prepare('INSERT INTO billing_customer_creations VALUES(?,?,?,?)').run(owner,'test','d'.repeat(32),Math.floor(Date.now()/1000)-24*3600);stale.s.customers.create=async()=>{assert.fail('Old ambiguous customer creation must not be retried');};
+ assert.equal((await billingAction(await browser(),'checkout',c,stale.deps)).status,503);assert.equal(stale.env.sqlite.prepare('SELECT count(*) n FROM billing_customer_creations').get()!.n,1);stale.env.sqlite.close();
 });

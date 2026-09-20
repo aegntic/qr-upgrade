@@ -1,3 +1,4 @@
+import {ownerClosed,journalUpload,settleUpload,deleteUnreferencedObject} from './lifecycle.mjs';
 import {limitsForPlan} from '../../shared/plan-limits.mjs';
 
 const LOCAL_ASSETS=new Set(["/artwork/botanical-source.png", "/artwork/dragon-source.png", "/artwork/coffee-source.png", "/artwork/alpine-source.png", "/artwork/tiger-source.png", "/artwork/koi-source.png", "/artwork/orchid-source.png", "/artwork/ocean-source.png", "/artwork/city-source.png", "/artwork/citrus-source.png", "/artwork/astral-source.png", "/artwork/vinyl-source.png", "/artwork/fox-source.png", "/artwork/wave-source.png", "/artwork/dragon.webp", "/artwork/koi.webp", "/artwork/coffee.webp", "/artwork/alpine.webp", "/artwork/tiger.webp", "/artwork/orchid.webp", "/artwork/city.webp", "/artwork/ocean.webp", "/artwork/citrus.webp", "/artwork/astral.webp", "/artwork/vinyl.webp", "/artwork/fox.webp", "/artwork/wave.webp", "/artwork/botanical.webp", "/brand-studies/linkedin-source.png", "/brand-studies/tiktok-source.png", "/brand-studies/amazon-source.png", "/brand-studies/instagram-source.png", "/brand-studies/youtube-source.png", "/brand-studies/snapchat-source.png", "/brand-studies/whatsapp-source.png", "/brand-studies/telegram-source.png", "/brand-studies/spotify-source.png", "/brand-studies/pinterest-source.png", "/brand-studies/discord-source.png", "/brand-studies/x-source.png", "/brand-studies/maps-source.png", "/brand-studies/facebook-source.png", "/brand-studies/linkedin.png", "/brand-studies/linkedin.webp", "/brand-studies/amazon.png", "/brand-studies/amazon.webp", "/brand-studies/snapchat.png", "/brand-studies/snapchat.webp", "/brand-studies/instagram.png", "/brand-studies/instagram.webp", "/brand-studies/tiktok.png", "/brand-studies/tiktok.webp", "/brand-studies/youtube.png", "/brand-studies/youtube.webp", "/brand-studies/spotify.png", "/brand-studies/spotify.webp", "/brand-studies/whatsapp.png", "/brand-studies/whatsapp.webp", "/brand-studies/discord.png", "/brand-studies/discord.webp", "/brand-studies/telegram.png", "/brand-studies/telegram.webp", "/brand-studies/pinterest.png", "/brand-studies/pinterest.webp", "/brand-studies/x.png", "/brand-studies/x.webp", "/brand-studies/maps.png", "/brand-studies/maps.webp", "/brand-studies/facebook.png", "/brand-studies/facebook.webp", "/brand-studies/sample-portrait.png", "/brand-studies/x-portrait.png", "/brand-studies/x-hero.webp", "/destination-icons/instagram.webp", "/destination-icons/tiktok.webp", "/destination-icons/linkedin.webp", "/destination-icons/snapchat.webp", "/destination-icons/youtube.webp", "/destination-icons/whatsapp.webp", "/destination-icons/facebook.webp"]);
@@ -69,22 +70,24 @@ export async function cloudRequest(request,env){
   }
   if(!(!id&&request.method==='POST'||id&&request.method==='PUT'))return reply({error:'Method not allowed.'},405);
   let snapshot;try{snapshot=validateSnapshot(await readBody(request));}catch{return reply({error:'Provide a valid design with embedded PNG, JPEG or WebP images, smaller than 3 MB.'},400);}
-  const designId=id||crypto.randomUUID(),now=new Date().toISOString(),r2key=`accounts/${owner}/${designId}/${crypto.randomUUID()}.json`;
+  const designId=id||crypto.randomUUID(),now=new Date().toISOString(),r2key=`accounts/${owner}/g1/${designId}/${crypto.randomUUID()}.json`;
   if(!id){const reserved=await env.DB.prepare('INSERT INTO cloud_designs(id,owner,name,created_at,updated_at,r2key) SELECT ?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM cloud_designs WHERE owner=?) < 50 + (? - 50) RETURNING id').bind(designId,owner,snapshot.name,now,now,r2key,owner,limits.cloudDesigns).first();if(!reserved)return reply({error:`Your cloud library holds up to ${limits.cloudDesigns} designs, including archived designs.`},409);}
   try{
+   await journalUpload(env,owner,Number(request.headers.get('x-qr-session-version')),r2key);
    await env.ASSETS.put(r2key,JSON.stringify(snapshot),{httpMetadata:{contentType:'application/json'}});
+   if(!await settleUpload(env,owner,r2key))return reply({error:'This account is closed.'},409);
    const saved=await env.DB.prepare('UPDATE cloud_designs SET name=?,updated_at=?,r2key=?,ready=1 WHERE id=? AND owner=? AND r2key=? RETURNING *').bind(snapshot.name,now,r2key,designId,owner,row?.r2key??r2key).first();
-   if(!saved){await env.ASSETS.delete(r2key);return reply({error:'The design changed in another window. Reopen it before saving.'},409);}
+   if(!saved){await deleteUnreferencedObject(env,owner,r2key);return reply({error:'The design changed in another window. Reopen it before saving.'},409);}
    // Losing an old object cleanup must not roll back a successful save.
-   if(row)try{await env.ASSETS.delete(row.r2key);}catch{}
+   if(row)try{await deleteUnreferencedObject(env,owner,row.r2key);}catch{}
    return reply({design:metadata(saved)},id?200:201);
   }catch{
    // A timeout can occur after D1 commits. Never remove a possibly committed object.
    try{
     const persisted=await env.DB.prepare('SELECT * FROM cloud_designs WHERE id=? AND owner=?').bind(designId,owner).first();
-    if(persisted?.ready&&persisted.r2key===r2key)return reply({design:metadata(persisted)},id?200:201);
-    await env.ASSETS.delete(r2key);
-    if(!id)await env.DB.prepare('DELETE FROM cloud_designs WHERE id=? AND owner=? AND ready=0').bind(designId,owner).run();
+    if(persisted?.ready&&persisted.r2key===r2key&&!await ownerClosed(env,owner))return reply({design:metadata(persisted)},id?200:201);
+    if(!id)await env.DB.prepare('DELETE FROM cloud_designs WHERE id=? AND owner=? AND ready=0 AND EXISTS(SELECT 1 FROM account_uploads WHERE r2key=cloud_designs.r2key AND owner=cloud_designs.owner)').bind(designId,owner).run();
+    await deleteUnreferencedObject(env,owner,r2key);
    }catch{}
 
    return reply({error:'Cloud save could not be completed. Your local design remains available.'},503);

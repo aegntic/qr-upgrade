@@ -1,3 +1,4 @@
+import {migrate} from './fixtures/migrations';
 import {validAccountDeps} from './fixtures/account-deps';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -24,7 +25,7 @@ const contentDraft=():ContentDraft=>({kind:'links',title:'My page',description:'
 test('shared plan catalog and each tier are immutable',()=>{assert.equal(Object.isFrozen(PLAN_LIMITS),true);for(const tier of tiers)assert.equal(Object.isFrozen(PLAN_LIMITS[tier]),true);});
 
 function d1(migration:string){
- const sqlite=new DatabaseSync(':memory:');sqlite.exec(readFileSync(new URL(migration,import.meta.url),'utf8'));
+ const sqlite=new DatabaseSync(':memory:');migrate(sqlite);
  const wrap=(sql:string,params:any[]=[])=>({bind:(...next:any[])=>wrap(sql,next),first:async()=>sqlite.prepare(sql).get(...params)||null,all:async()=>({results:sqlite.prepare(sql).all(...params)}),run:async()=>sqlite.prepare(sql).run(...params),sql,params});
  const DB={prepare:wrap,async batch(statements:ReturnType<typeof wrap>[]){sqlite.exec('BEGIN');try{const results=statements.map(statement=>({results:sqlite.prepare(statement.sql).all(...statement.params)}));sqlite.exec('COMMIT');return results;}catch(error){sqlite.exec('ROLLBACK');throw error;}}};
  return {sqlite,DB};

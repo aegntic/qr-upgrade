@@ -1,3 +1,5 @@
+import {accountDeletionRequest,cleanupAccounts} from './account-deletion.mjs';
+import {privateSession,ownerClosed} from './lifecycle.mjs';
 import { accountExportRequest } from "./account-export.mjs";
 import { accountRequest, securityCleanupStatements } from "./account.mjs";
 import { cloudRequest } from "./cloud.mjs";
@@ -43,6 +45,13 @@ export default {
   const url=new URL(request.url);
   if(url.pathname==='/health'&&request.method==='GET')return reply({ready:!!env.DB&&!!env.AI,model:env.AI_MODEL});
   try {
+   if(url.pathname.startsWith('/account/deletion/'))return await accountDeletionRequest(request,env);
+   const privatePath=/^\/(cloud|links|content|content-assets)(?:\/|$)/.test(url.pathname);
+   if(privatePath&&!await privateSession(request,env))return reply({error:'Sign in again to access this account.'},401);
+   if(url.pathname.startsWith('/billing')&&url.pathname!=='/billing/events'&&request.headers.has('x-qr-user')){
+    if(await ownerClosed(env,request.headers.get('x-qr-user')))return reply({error:'This account is closed.'},409);
+    if(request.method!=='GET'&&!await privateSession(request,env))return reply({error:'Sign in again to manage billing.'},401);
+   }
    if(url.pathname==='/account/export'||url.pathname.startsWith('/account/export/'))return await accountExportRequest(request,env);
    if(url.pathname.startsWith('/account/'))return await accountRequest(request,env);
    if(url.pathname==='/links'||url.pathname.startsWith('/links/'))return await linksRequest(request,env);
@@ -81,9 +90,9 @@ export default {
    return reply({id:job.id,status:'pending'},202);
   }catch{return reply({error:url.pathname.startsWith('/account/')?'Account security is temporarily unavailable. Please try again.':'Artwork service is temporarily unavailable. Please try again.'},503);}
  },
- async scheduled(_event,env,ctx){ctx.waitUntil(env.DB.batch([
+ async scheduled(_event,env,ctx){ctx.waitUntil((async()=>{await env.DB.batch([
   env.DB.prepare("UPDATE art_jobs SET image=NULL,state='expired' WHERE created_at<? AND state!='expired'").bind(Date.now()-3600000),
   env.DB.prepare('DELETE FROM art_jobs WHERE created_at<?').bind(Date.now()-3*86400000),
   ...securityCleanupStatements(env)
- ]));}
+ ]);await cleanupAccounts(env);})());}
 };

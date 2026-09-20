@@ -60,8 +60,8 @@ export async function resolveLink(r,env){
  const slug=new URL(r.url).pathname.match(/^\/resolve\/([A-Za-z0-9_-]{16})$/)?.[1];if(!slug||!SLUG.test(slug))return reply({error:'Link not found.'},404);
  if(!['GET','HEAD'].includes(r.method))return reply({error:'Method not allowed.'},405);
  try{
-  const query=env.DB.prepare("SELECT target FROM dynamic_links WHERE slug=? AND status='published' AND archived=0").bind(slug);
-  const statements=[query];if(r.method==='GET'&&r.headers.get('x-qr-count')!=='0')statements.push(env.DB.prepare("INSERT INTO link_daily_counts (slug,day,count) SELECT slug,?,1 FROM dynamic_links WHERE slug=? AND status='published' AND archived=0 ON CONFLICT(slug,day) DO UPDATE SET count=count+1").bind(new Date().toISOString().slice(0,10),slug));
+  const query=env.DB.prepare("SELECT target FROM dynamic_links WHERE slug=? AND status='published' AND archived=0 AND NOT EXISTS(SELECT 1 FROM account_security a WHERE a.owner=dynamic_links.owner AND a.lifecycle='closed')").bind(slug);
+  const statements=[query];if(r.method==='GET'&&r.headers.get('x-qr-count')!=='0')statements.push(env.DB.prepare("INSERT INTO link_daily_counts (slug,day,count) SELECT slug,?,1 FROM dynamic_links WHERE slug=? AND status='published' AND archived=0 AND NOT EXISTS(SELECT 1 FROM account_security a WHERE a.owner=dynamic_links.owner AND a.lifecycle='closed') ON CONFLICT(slug,day) DO UPDATE SET count=count+1").bind(new Date().toISOString().slice(0,10),slug));
   const result=await env.DB.batch(statements),row=result[0].results?.[0];if(!row)return reply({error:'Link not found.'},404);
   return reply({target:validateTarget(row.target)});
  }catch{return reply({error:'This link is temporarily unavailable.'},503);}

@@ -18,7 +18,7 @@ async function privateProxy(r:Request,path:string,c:AccountConfig,allowed:boolea
  const user=await checkedAccount(r,c,entitlementOptions?.accountDeps);if(user instanceof Response)return user;if(!user)return accountReply({error:'Sign in to manage your content.'},401);if(!allowed)return accountReply({error:'Method not allowed.'},405);
  let body:string|undefined;if(r.method!=='GET'){if(!accountSameOrigin(r,c))return accountReply({error:'Open your account to update content.'},403);try{body=JSON.stringify(await readContentBody(r,limit));}catch{return accountReply({error:'Use valid JSON within the upload limits.'},400);}}
  let plan:string|undefined;if(needsEntitlement)try{plan=(await resolveEntitlement(user.id,entitlementOptions?.config||{...billingConfig(),account:c},entitlementOptions?.deps)).tier;}catch{return unavailable();}
- return forward(path,c,{method:r.method,headers:{'x-qr-user':user.id,'Content-Type':'application/json',...(plan?{'x-qr-plan':plan}:{})},body},binary);
+ return forward(path,c,{method:r.method,headers:{'x-qr-user':user.id,'x-qr-session-version':String(user.version),'Content-Type':'application/json',...(plan?{'x-qr-plan':plan}:{})},body},binary);
 }
 export async function contentProxy(r:Request,id?:string,c:AccountConfig=accountConfig(),submissions=false,entitlementOptions?:EntitlementOptions){
  if(id&&!UUID.test(id))return accountReply({error:'Page not found.'},404);

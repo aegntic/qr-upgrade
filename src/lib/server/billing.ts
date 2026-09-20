@@ -19,8 +19,8 @@ export async function readBillingBody(r:Request,limit=1024){
  const timeout=new Promise<never>((_,reject)=>{timer=setTimeout(()=>{reject(new Error('Timeout'));void reader.cancel();},5000);});
  try{while(true){const item=await Promise.race([reader.read(),timeout]);if(item.done)break;length+=item.value.length;if(length>limit){void reader.cancel();throw new Error('Too large');}chunks.push(item.value);}return Buffer.concat(chunks);}finally{clearTimeout(timer);reader.releaseLock();}
 }
-async function service(c:BillingConfig,d:BillingDeps,path:string,owner?:string,body?:unknown,method?:string):Promise<{binding:Binding|null}>{
- const r=await (d.fetch||fetch)(`${c.account.serviceUrl!.replace(/\/$/,'')}${path}`,{method:method||(body?'POST':'GET'),headers:{Authorization:`Bearer ${c.account.secret}`,'Content-Type':'application/json',...(owner?{'x-qr-user':owner}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(10000),cache:'no-store'});
+async function service(c:BillingConfig,d:BillingDeps,path:string,owner?:string,body?:unknown,method?:string):Promise<{binding:Binding|null;customerPending?:boolean;customerCreation?:{mode:string;token:string;created_at:number}|null}>{
+ const r=await (d.fetch||fetch)(`${c.account.serviceUrl!.replace(/\/$/,'')}${path}`,{method:method||(body?'POST':'GET'),headers:{Authorization:`Bearer ${c.account.secret}`,'Content-Type':'application/json',...(owner?{'x-qr-user':owner}:{}),...(body&&typeof body==='object'&&'version' in body?{'x-qr-session-version':String(body.version)}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(10000),cache:'no-store'});
  if(!r.ok)throw new Error('Service unavailable');return r.json();
 }
 async function plans(s:Stripe,c:BillingConfig):Promise<BillingPlan[]>{
@@ -96,11 +96,26 @@ export async function billingAction(r:Request,action:'checkout'|'portal',c=billi
   let b=(await service(c,d,'/billing',user.id)).binding;
   if(!b&&action==='portal')return accountReply({error:'No billing account yet.'},409);
   const portalConfigurationId=await portalConfiguration(s,c);
-  if(!b){const customer=await s.customers.create({metadata:{owner:user.id}},{idempotencyKey:`qr-customer-${mode(c)}-${user.id}`});b=(await service(c,d,'/billing/customer',user.id,{customerId:customer.id,mode:mode(c)},'PUT')).binding;}
+  if(!b){
+   const reserved=await service(c,d,'/billing/customer-start',user.id,{mode:mode(c),token:randomBytes(16).toString('hex'),version:user.version});
+   b=reserved.binding;
+   if(!b){
+    const pending=reserved.customerCreation;
+    if(!pending||pending.mode!==mode(c)||! /^[a-f0-9]{32}$/.test(pending.token)||!Number.isSafeInteger(pending.created_at)||Date.now()/1000-pending.created_at>23*3600)throw new Error('Customer creation reconciliation required');
+    let customer:Stripe.Customer;
+    try{customer=await s.customers.create({metadata:{owner:user.id}},{idempotencyKey:`qr-customer-${mode(c)}-${user.id}`});}
+    catch(error){
+     // Only a definitive metadata validation rejection proves this exact create never executed.
+     if(error instanceof Stripe.errors.StripeInvalidRequestError&&error.statusCode===400&&error.requestId&&['metadata','metadata[owner]'].includes(error.param||''))await service(c,d,'/billing/customer-abort',user.id,{token:pending.token,version:user.version});
+     throw error;
+    }
+    b=(await service(c,d,'/billing/customer',user.id,{customerId:customer.id,mode:mode(c),version:user.version},'PUT')).binding;
+   }
+  }
   if(!b||b.owner!==user.id)throw new Error();
   const current=await subscriptions(s,c,b);
   if(action==='portal'||current.blocked){const portal=await s.billingPortal.sessions.create({customer:b.customer_id,return_url:`${accountOrigin(c.account)}/billing`,configuration:portalConfigurationId});return accountReply({url:hosted(portal.url,'billing.stripe.com')});}
-  b=(await service(c,d,'/billing/checkout',user.id,{action:'reserve',tier,token:randomBytes(16).toString('hex')})).binding;if(!b?.reservation||!b.tier||!b.reserved_at)throw new Error();
+  b=(await service(c,d,'/billing/checkout',user.id,{action:'reserve',tier,version:user.version,token:randomBytes(16).toString('hex')})).binding;if(!b?.reservation||!b.tier||!b.reserved_at)throw new Error();
   let session:Stripe.Checkout.Session;
   if(b.session_id)session=await s.checkout.sessions.retrieve(b.session_id);
   else{
@@ -112,14 +127,14 @@ export async function billingAction(r:Request,action:'checkout'|'portal',c=billi
     // Only Stripe's definitive parameter rejection proves this replay did not execute.
     // Network errors, 5xx and idempotency conflicts remain uncertain and keep the key.
     if(error instanceof Stripe.errors.StripeInvalidRequestError&&error.statusCode===400&&error.param==='expires_at'&&error.requestId&&b.reserved_at+1860<Math.floor(Date.now()/1000)+1800){
-     await service(c,d,'/billing/checkout',user.id,{action:'release',token:b.reservation});
+     await service(c,d,'/billing/checkout',user.id,{action:'release',token:b.reservation,version:user.version});
      return accountReply({error:'Checkout could not start before its expiry window. Please try again.'},409);
     }
     throw error;
    }
   }
   if(id(session.customer)!==b.customer_id||session.livemode!==(mode(c)==='live')||session.mode!=='subscription')throw new Error('Session mismatch');
-  if(session.status==='expired'){await service(c,d,'/billing/checkout',user.id,{action:'release',token:b.reservation});return accountReply({error:'The previous checkout expired. Please try again.'},409);}
+  if(session.status==='expired'){await service(c,d,'/billing/checkout',user.id,{action:'release',token:b.reservation,version:user.version});return accountReply({error:'The previous checkout expired. Please try again.'},409);}
   if(session.status==='complete'){
    const subscriptionId=id(session.subscription);
    if(subscriptionId){
@@ -129,7 +144,7 @@ export async function billingAction(r:Request,action:'checkout'|'portal',c=billi
      // Recheck all subscriptions after retrieving the completed session's subscription.
      // A terminal old subscription alone cannot justify a new checkout.
      if(!(await subscriptions(s,c,b)).blocked){
-      await service(c,d,'/billing/checkout',user.id,{action:'release',token:b.reservation});
+      await service(c,d,'/billing/checkout',user.id,{action:'release',token:b.reservation,version:user.version});
       return accountReply({error:'The previous subscription ended. Please try again to start a new checkout.'},409);
      }
     }
@@ -137,7 +152,7 @@ export async function billingAction(r:Request,action:'checkout'|'portal',c=billi
   }
   if(session.status!=='open')return accountReply({error:'Checkout is processing. Refresh billing shortly.'},409);
   const url=hosted(session.url,'checkout.stripe.com');
-  await service(c,d,'/billing/checkout',user.id,{action:'finalize',token:b.reservation,sessionId:session.id});return accountReply({url});
+  await service(c,d,'/billing/checkout',user.id,{action:'finalize',token:b.reservation,sessionId:session.id,version:user.version});return accountReply({url});
  }catch{return unavailable();}
 }
 export async function billingWebhook(r:Request,c=billingConfig(),d:BillingDeps={}){
@@ -150,4 +165,54 @@ export async function billingWebhook(r:Request,c=billingConfig(),d:BillingDeps={
  const customerId=id(object.customer);const subscriptionId=object.object==='subscription'?object.id:id(object.subscription);
  if(!customerId)return accountReply({received:true});
  try{await service(c,d,'/billing/events',undefined,{id:event.id,type:event.type,created:event.created,customerId,subscriptionId,mode:mode(c)});return accountReply({received:true});}catch{return unavailable();}
+}
+
+export class ClosureBillingBlocked extends Error {}
+export type ClosureBinding={customerId:string;mode:'test'|'live';revision:number}|null;
+// Closure deliberately ignores BILLING_ENABLED and plan/portal feature switches.
+export async function checkClosureBilling(owner:string,version:number,c=billingConfig(),d:BillingDeps={}):Promise<ClosureBinding>{
+ const response=await service(c,d,'/billing',owner);
+ if(!response||!Object.hasOwn(response,'binding'))throw new Error('Invalid billing response');
+ if(response.customerPending)throw new ClosureBillingBlocked('A billing customer setup is still pending. Retry Billing to resolve it before closing your account; an uncertain provider operation may need operator reconciliation.');
+ const b=response.binding as (Binding&{revision:number})|null;
+ if(b===null)return null;
+ if(!b||typeof b!=='object')throw new Error('Invalid billing response');
+ const blockedMessage='Account closure is waiting for Billing. End any subscription through Billing and wait until it has actually ended. Open or uncertain checkouts must be resolved before trying again.';
+ const block=()=>{throw new ClosureBillingBlocked(blockedMessage);};
+ if(b.owner!==owner||!Number.isSafeInteger(b.revision)||b.revision<0||! /^(sk|rk)_(test|live)_[A-Za-z0-9]+$/.test(c.key||'')||b.mode!==mode(c))block();
+ const s=client(c,d),customer=await s.customers.retrieve(b.customer_id);
+ if(customer.deleted||customer.id!==b.customer_id||customer.livemode!==(b.mode==='live')||customer.metadata.owner!==owner)block();
+ const terminal=new Set(['canceled','incomplete_expired']);
+ async function noSubscriptions(){
+  const list=await s.subscriptions.list({customer:b!.customer_id,status:'all',limit:100});
+  if(list.has_more||list.data.some(sub=>id(sub.customer)!==b!.customer_id||sub.livemode!==(b!.mode==='live')||sub.metadata.owner!==owner||!terminal.has(sub.status)))block();
+ }
+ await noSubscriptions();
+ if(!Number.isSafeInteger(b.lease_until)||b.lease_until>Math.floor(Date.now()/1000))block();
+ const sessions=await s.checkout.sessions.list({customer:b.customer_id,limit:25});
+ if(sessions.has_more)block();
+ for(const session of sessions.data){
+  if(id(session.customer)!==b.customer_id||session.livemode!==(b.mode==='live')||session.metadata?.owner!==owner||session.mode!=='subscription'||!['expired','complete'].includes(session.status||''))block();
+  if(session.status==='complete'){
+   const subscriptionId=id(session.subscription);if(!subscriptionId)block();
+   const sub=await s.subscriptions.retrieve(subscriptionId!);
+   if(sub.id!==subscriptionId||id(sub.customer)!==b.customer_id||sub.livemode!==(b.mode==='live')||sub.metadata.owner!==owner||!terminal.has(sub.status))block();
+  }
+ }
+ if(b.reservation){
+  if(!b.session_id)block(); // An unknown create is never discarded, even with an expired lease.
+  const session=await s.checkout.sessions.retrieve(b.session_id!);
+  if(session.id!==b.session_id||id(session.customer)!==b.customer_id||session.livemode!==(b.mode==='live')||session.metadata?.owner!==owner||session.mode!=='subscription')block();
+  if(session.status==='complete'){
+   const subscriptionId=id(session.subscription);if(!subscriptionId)block();
+   const sub=await s.subscriptions.retrieve(subscriptionId!);
+   if(sub.id!==subscriptionId||id(sub.customer)!==b.customer_id||sub.livemode!==(b.mode==='live')||sub.metadata.owner!==owner||!terminal.has(sub.status))block();
+  }else if(session.status!=='expired')block();
+  await noSubscriptions();
+  const released=(await service(c,d,'/billing/checkout',owner,{action:'closure-release',token:b.reservation,sessionId:b.session_id,revision:b.revision,version})).binding as (Binding&{revision:number})|null;
+  if(!released||released.owner!==owner||released.customer_id!==b.customer_id||released.mode!==b.mode||released.reservation!==null||released.session_id!==null||released.lease_until!==0)block();
+  return {customerId:released!.customer_id,mode:released!.mode,revision:released!.revision};
+ }
+ if(b.session_id||b.reserved_at!==null||b.tier!==null)block();
+ return {customerId:b.customer_id,mode:b.mode,revision:b.revision};
 }

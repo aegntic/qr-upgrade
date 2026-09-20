@@ -7,7 +7,7 @@ import type {JWTPayload} from 'jose';
 const JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'), { timeoutDuration: 5000 });
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 export const MAX_CLOUD_BYTES = 3 * 1024 * 1024;
-export type Account = { id: string; name: string; email: string };
+export type Account = { id: string; name: string; email: string; version: number };
 export type AccountConfig = { clientId?: string; clientSecret?: string; secret?: string; serviceUrl?: string; development: boolean };
 export type EntitlementOptions={config?:BillingConfig;deps?:BillingDeps;accountDeps?:AccountDeps};
 export function accountConfig(): AccountConfig { return {clientId:process.env.GOOGLE_CLIENT_ID,clientSecret:process.env.GOOGLE_CLIENT_SECRET,secret:process.env.QR_SERVICE_SECRET,serviceUrl:process.env.QR_SERVICE_URL,development:process.env.NODE_ENV==='development'}; }
@@ -17,13 +17,14 @@ export function accountSameOrigin(r:Request,c=accountConfig()) { return r.header
 export function accountReply(body:unknown,status=200) { return Response.json(body,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}}); }
 function key(c:AccountConfig,purpose:string) { if(!c.secret||c.secret.length<32)throw new Error('Not configured');return createHmac('sha256',c.secret).update(`qr-upgrade:account:${purpose}:v1`).digest(); }
 function cookieName(c:AccountConfig,purpose:string) { return `${c.development?'':'__Host-'}qr-${purpose}`; }
-function readCookie(r:Request,c:AccountConfig,purpose:string) { return (r.headers.get('cookie')||'').split(';').map(x=>x.trim()).find(x=>x.startsWith(`${cookieName(c,purpose)}=`))?.split('=').slice(1).join('='); }
-function cookie(c:AccountConfig,purpose:string,value:string,age:number) { return `${cookieName(c,purpose)}=${value}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${age}${c.development?'':'; Secure'}`; }
-export async function signAccountToken(payload:Record<string,unknown>,purpose:'session'|'oauth',c=accountConfig()) { return new SignJWT(payload).setProtectedHeader({alg:'HS256'}).setIssuer('qrupgrade').setAudience(purpose).setIssuedAt().setExpirationTime(purpose==='session'?'7d':'10m').sign(key(c,purpose)); }
-async function verifyToken(token:string,purpose:string,c:AccountConfig) { return (await jwtVerify(token,key(c,purpose),{algorithms:['HS256'],issuer:'qrupgrade',audience:purpose,requiredClaims:['exp','iat']})).payload; }
+export function readCookie(r:Request,c:AccountConfig,purpose:string) { return (r.headers.get('cookie')||'').split(';').map(x=>x.trim()).find(x=>x.startsWith(`${cookieName(c,purpose)}=`))?.split('=').slice(1).join('='); }
+export function cookie(c:AccountConfig,purpose:string,value:string,age:number) { return `${cookieName(c,purpose)}=${value}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${age}${c.development?'':'; Secure'}`; }
+export async function signAccountToken(payload:Record<string,unknown>,purpose:'session'|'oauth'|'deletion-intent'|'deletion-status',c=accountConfig()) { return new SignJWT(payload).setProtectedHeader({alg:'HS256'}).setIssuer('qrupgrade').setAudience(purpose).setIssuedAt().setExpirationTime(purpose==='session'?'7d':purpose==='deletion-status'?'30d':purpose==='deletion-intent'?'5m':'10m').sign(key(c,purpose)); }
+export async function verifyToken(token:string,purpose:string,c:AccountConfig) { return (await jwtVerify(token,key(c,purpose),{algorithms:['HS256'],issuer:'qrupgrade',audience:purpose,requiredClaims:['exp','iat']})).payload; }
 export type AccountDeps={fetch?:typeof fetch};
 export type CallbackDeps=AccountDeps & {verifyGoogleToken?:(token:string,c:AccountConfig)=>Promise<JWTPayload>};
 export class AccountUnavailable extends Error {}
+export class AccountClosed extends Error {}
 export const accountUnavailable=()=>accountReply({error:'Account security is temporarily unavailable. Please try again. Your saved designs remain stored.'},503);
 async function securityService(path:string,owner:string,c:AccountConfig,deps:AccountDeps={},body?:unknown,version?:number){
  try{
@@ -34,8 +35,9 @@ async function securityService(path:string,owner:string,c:AccountConfig,deps:Acc
  if(denial&&typeof denial==='object'&&!Array.isArray(denial)&&Object.keys(denial).length===2&&denial.code==='account_session_invalid'&&denial.owner===owner)return null;
  throw new Error('Invalid session denial');
  }
+ if(result.status===409&&path==='sign-in'){const denial=await result.json();if(denial&&typeof denial==='object'&&!Array.isArray(denial)&&Object.keys(denial).length===2&&denial.code==='account_closed'&&denial.owner===owner)throw new AccountClosed();}
  if(!result.ok)throw new Error();return await result.json();
- }catch{throw new AccountUnavailable('Account security unavailable');}
+ }catch(error){if(error instanceof AccountClosed)throw error;throw new AccountUnavailable('Account security unavailable');}
 }
 async function signedSession(r:Request,c:AccountConfig){
  if(!configured(c))return null;
@@ -52,7 +54,7 @@ export async function currentSession(r:Request,c:AccountConfig,deps:AccountDeps=
  return state.version===session.version?session:null;
 }
 export async function getAccount(r:Request,c=accountConfig(),deps:AccountDeps={}):Promise<Account|null>{
- const session=await currentSession(r,c,deps);return session?{id:session.id,name:session.name,email:session.email}:null;
+ const session=await currentSession(r,c,deps);return session?{id:session.id,name:session.name,email:session.email,version:session.version}:null;
 }
 // Route consumers keep service failure distinct from an absent or revoked session.
 export async function checkedAccount(r:Request,c=accountConfig(),deps:AccountDeps={}):Promise<Account|null|Response>{
@@ -98,9 +100,15 @@ export async function callback(r:Request,c=accountConfig(),deps:CallbackDeps={})
   const payload=deps.verifyGoogleToken?await deps.verifyGoogleToken(tokens.id_token,c):(await jwtVerify(tokens.id_token,JWKS,{algorithms:['RS256'],issuer:['https://accounts.google.com','accounts.google.com'],audience:c.clientId!,requiredClaims:['sub','exp','iat','nonce','email','email_verified']})).payload;
   if(payload.nonce!==p.nonce||payload.email_verified!==true||!payload.sub||payload.sub.length>255||typeof payload.email!=='string'||payload.email.length>254||(payload.azp!==undefined&&payload.azp!==c.clientId))throw new Error();
   const user={sub:createHash('sha256').update(`google:${payload.sub}`).digest('hex'),email:payload.email,name:typeof payload.name==='string'?payload.name.slice(0,120):'Your account'};
+  if(p.action!==undefined){
+   if(p.action!=='delete')throw new Error();
+   const deletion=await import('./account-deletion');
+   return await deletion.finishDeletionVerification(r,c,deps,p,payload,user.sub);
+  }
   const security=await securityService('sign-in',user.sub,c,deps,{});if(!security||security.owner!==user.sub||!Number.isSafeInteger(security.version)||security.version<1)throw new AccountUnavailable();
   response.headers.append('Set-Cookie',cookie(c,'session',await signAccountToken({...user,sv:security.version},'session',c),604800));
- } catch(error) { response.headers.set('Location',`${accountOrigin(c)}/account?error=${error instanceof AccountUnavailable?'unavailable':'signin'}`); }
+  response.headers.append('Set-Cookie',cookie(c,'deletion-intent','',0));response.headers.append('Set-Cookie',cookie(c,'deletion-status','',0));
+ } catch(error) { response.headers.set('Location',`${accountOrigin(c)}/account?error=${error instanceof AccountClosed?'closed':error instanceof AccountUnavailable?'unavailable':'signin'}`); }
  return response;
 }
 export function logout(r:Request,c=accountConfig()) { if(!accountSameOrigin(r,c))return accountReply({error:'Open your account to sign out.'},403);const response=accountReply({signedIn:false});response.headers.append('Set-Cookie',cookie(c,'session','',0));response.headers.append('Set-Cookie',cookie(c,'oauth','',0));return response; }
@@ -116,5 +124,5 @@ export async function cloudProxy(r:Request,id?:string,c=accountConfig(),entitlem
  if(!['GET','POST','PUT','PATCH'].includes(r.method)||(!id&&['PUT','PATCH'].includes(r.method))||(id&&r.method==='POST'))return accountReply({error:'Method not allowed.'},405);
  let body:string|undefined;if(r.method!=='GET'){if(!accountSameOrigin(r,c))return accountReply({error:'Open the studio to update your designs.'},403);try{body=await boundedCloudBody(r);}catch{return accountReply({error:'Use a valid JSON design smaller than 3 MB.'},400);}}
  try {let plan:string|undefined;if(!id&&r.method==='POST'){const billing=await import('./billing');const config=entitlementOptions?.config||{...billing.billingConfig(),account:c};plan=(await billing.resolveEntitlement(user.id,config,entitlementOptions?.deps)).tier;}
- const response=await fetch(`${c.serviceUrl!.replace(/\/$/,'')}/cloud/designs${id?`/${id}`:''}`,{method:r.method,headers:{Authorization:`Bearer ${c.secret}`,'x-qr-user':user.id,'Content-Type':'application/json',...(plan?{'x-qr-plan':plan}:{})},body,signal:AbortSignal.timeout(15000),cache:'no-store'});if(response.status>=500)return accountReply({error:'Cloud storage is temporarily unavailable. Your local designs remain available.'},503);return accountReply(await response.json(),response.status);}catch{return accountReply({error:'Cloud storage is temporarily unavailable. Your local designs remain available.'},503);}
+ const response=await fetch(`${c.serviceUrl!.replace(/\/$/,'')}/cloud/designs${id?`/${id}`:''}`,{method:r.method,headers:{Authorization:`Bearer ${c.secret}`,'x-qr-user':user.id,'x-qr-session-version':String(user.version),'Content-Type':'application/json',...(plan?{'x-qr-plan':plan}:{})},body,signal:AbortSignal.timeout(15000),cache:'no-store'});if(response.status>=500)return accountReply({error:'Cloud storage is temporarily unavailable. Your local designs remain available.'},503);return accountReply(await response.json(),response.status);}catch{return accountReply({error:'Cloud storage is temporarily unavailable. Your local designs remain available.'},503);}
 }

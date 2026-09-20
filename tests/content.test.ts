@@ -1,3 +1,4 @@
+import {migrate} from './fixtures/migrations';
 import {validAccountDeps} from './fixtures/account-deps';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,8 +12,8 @@ const owner='a'.repeat(64),other='b'.repeat(64),network='c'.repeat(64);
 const config:AccountConfig={clientId:'test',clientSecret:'test',secret:'s'.repeat(64),serviceUrl:'https://service.example',development:true};
 const draft=(kind:ContentDraft['kind']='links'):ContentDraft=>({kind,title:'My page',description:'Description',accent:'#123abc',items:kind==='links'?[{title:'Link',description:'',price:'',url:'https://example.com',assetId:''}]:[],fileId:'',formMessage:''});
 function environment(){
- const sqlite=new DatabaseSync(':memory:');sqlite.exec(readFileSync(new URL('../workers/qr-service/migrations/0004_content.sql',import.meta.url),'utf8'));const objects=new Map<string,Uint8Array>();
- const wrap=(sql:string,params:any[]=[])=>({bind:(...p:any[])=>wrap(sql,p),first:async()=>sqlite.prepare(sql).get(...params)||null,all:async()=>({results:sqlite.prepare(sql).all(...params)}),sql,params});
+ const sqlite=new DatabaseSync(':memory:');migrate(sqlite);const objects=new Map<string,Uint8Array>();
+ const wrap=(sql:string,params:any[]=[])=>({bind:(...p:any[])=>wrap(sql,p),first:async()=>sqlite.prepare(sql).get(...params)||null,all:async()=>({results:sqlite.prepare(sql).all(...params)}),run:async()=>sqlite.prepare(sql).run(...params),sql,params});
  return {sqlite,objects,ASSETS:{async put(key:string,bytes:Uint8Array){objects.set(key,bytes);},async delete(key:string){objects.delete(key);},async get(key:string){const v=objects.get(key);return v?{body:v}:null;}},DB:{prepare:wrap,async batch(statements:ReturnType<typeof wrap>[]){sqlite.exec('BEGIN');try{const results=statements.map(s=>({results:sqlite.prepare(s.sql).all(...s.params)}));sqlite.exec('COMMIT');return results;}catch(e){sqlite.exec('ROLLBACK');throw e;}}}};
 }
 function req(path='/content',method='GET',body?:unknown,user=owner,net=network){return new Request(`https://service.example${path}`,{method,headers:{'x-qr-user':user,'x-qr-network':net,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});}

@@ -9,7 +9,7 @@ export async function linksProxy(r:Request,id?:string,c:AccountConfig=accountCon
  let body:string|undefined;
  if(r.method!=='GET'){if(!accountSameOrigin(r,c))return accountReply({error:'Open your account to update links.'},403);try{body=JSON.stringify(await readLinkBody(r));}catch{return accountReply({error:'Use valid JSON link details smaller than 16 KB.'},400);}}
  try{let plan:string|undefined;if(!id&&r.method==='POST')plan=(await resolveEntitlement(user.id,entitlementOptions?.config||{...billingConfig(),account:c},entitlementOptions?.deps)).tier;
- const response=await fetch(`${c.serviceUrl!.replace(/\/$/,'')}/links${id?`/${id}`:''}`,{method:r.method,headers:{Authorization:`Bearer ${c.secret}`,'x-qr-user':user.id,'Content-Type':'application/json',...(plan?{'x-qr-plan':plan}:{})},body,signal:AbortSignal.timeout(5000),cache:'no-store'});if(response.status>=500)throw new Error();return accountReply(await response.json(),response.status);}catch{return accountReply({error:'Link storage is temporarily unavailable.'},503);}
+ const response=await fetch(`${c.serviceUrl!.replace(/\/$/,'')}/links${id?`/${id}`:''}`,{method:r.method,headers:{Authorization:`Bearer ${c.secret}`,'x-qr-user':user.id,'x-qr-session-version':String(user.version),'Content-Type':'application/json',...(plan?{'x-qr-plan':plan}:{})},body,signal:AbortSignal.timeout(5000),cache:'no-store'});if(response.status>=500)throw new Error();return accountReply(await response.json(),response.status);}catch{return accountReply({error:'Link storage is temporarily unavailable.'},503);}
 }
 export async function linkRedirect(r:Request,slug:string,c:AccountConfig=accountConfig()) {
  const headers={'Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff'};
