@@ -4,6 +4,8 @@
 
 Complete. The v3 mark is active in the web header/footer, browser icons, hosted-page credit, native root header, app-switcher privacy cover, native icon/favicon and splash. The prepared static 1200×630 social card now uses Next's metadata image convention, and `/opengraph-image` remains compatible through a narrow rewrite.
 
+Follow-up review also replaced the account page's separate home wordmark with the same v3 mark and accessible home label while retaining the account navigation text and link behavior.
+
 Changed files:
 
 - `mobile/app.json`
@@ -23,10 +25,12 @@ Changed files:
 - `public/brand/qr-upgrade-logo-v3-64.png`
 - `public/icon.svg`
 - `src/app/layout.tsx`
+- `src/app/account.css`
 - `src/app/opengraph-image.jpg`
 - `src/app/opengraph-image.tsx` (removed)
 - `src/app/services.css`
 - `src/components/brand.tsx`
+- `src/components/account-panel.tsx`
 - `src/components/hosted-page-view.tsx`
 
 ## Commit
@@ -36,6 +40,7 @@ Included in the logo-v3 surfaces task commit; the final commit ID is reported to
 ## Verification
 
 - `npm run typecheck` — passed.
+- Follow-up account mark reference scan and `npm run typecheck` — passed.
 - `mobile: npm run typecheck` — passed.
 - `mobile: npx expo config --type public --json` — resolved the v3 icon/favicon, the SDK 57 splash plugin, `#080b10` contained splash configuration, and unchanged Android/iOS IDs.
 - `mobile: npx expo export --platform all` — passed for Android, iOS and web.
