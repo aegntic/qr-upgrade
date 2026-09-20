@@ -35,17 +35,38 @@ export const metadata: Metadata = {
     title: "QR Upgrade — Your brand. Every scan.",
     description,
     url: site,
+    images: [
+      {
+        url: "/opengraph-image.jpg",
+        width: 1200,
+        height: 630,
+        alt: "QR Upgrade — Your brand. Every scan.",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "QR Upgrade — Your brand. Every scan.",
     description,
+    images: ["/opengraph-image.jpg"],
   },
   icons: {
-    icon: {
-      url: "/brand/qr-upgrade-logo-v2.png",
+    icon: [
+      {
+        url: "/brand/qr-upgrade-logo-v3-32.png",
+        type: "image/png",
+        sizes: "32x32",
+      },
+      {
+        url: "/brand/qr-upgrade-logo-v3-64.png",
+        type: "image/png",
+        sizes: "64x64",
+      },
+    ],
+    apple: {
+      url: "/brand/qr-upgrade-apple-v3.png",
       type: "image/png",
-      sizes: "1254x1254",
+      sizes: "180x180",
     },
   },
 };

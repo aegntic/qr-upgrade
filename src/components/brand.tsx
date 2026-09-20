@@ -7,7 +7,7 @@ export function Brand() {
     <Link href="/" className="brand" aria-label="QR Upgrade home">
       <img
         className="brand-mark"
-        src="/brand/qr-upgrade-logo-v2.png"
+        src="/brand/qr-upgrade-logo-v3-128.png"
         alt=""
         width={42}
         height={42}

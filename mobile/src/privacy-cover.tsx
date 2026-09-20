@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AppState, View, Text, StyleSheet } from "react-native";
+import { AppState, View, Text, StyleSheet, Image } from "react-native";
 export function useForeground() {
   const [active, setActive] = useState(AppState.currentState === "active");
   useEffect(() => {
@@ -26,16 +26,21 @@ export function PrivacyCover({ children }: { children: React.ReactNode }) {
           style={[
             StyleSheet.absoluteFill,
             {
-              backgroundColor: "#193c2f",
+              backgroundColor: "#080b10",
               alignItems: "center",
               justifyContent: "center",
             },
           ]}
         >
-          <Text style={{ color: "#f6f5ef", fontSize: 22, fontWeight: "700" }}>
+          <Image
+            accessible={false}
+            source={require("../assets/mark-v3.png")}
+            style={{ width: 84, height: 84, marginBottom: 16 }}
+          />
+          <Text style={{ color: "#f4f7fa", fontSize: 22, fontWeight: "700" }}>
             QR Upgrade
           </Text>
-          <Text style={{ color: "#dce2d8", marginTop: 10 }}>
+          <Text style={{ color: "#9ba8b7", marginTop: 10 }}>
             Your draft is hidden while the app is inactive.
           </Text>
         </View>
