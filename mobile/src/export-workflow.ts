@@ -9,6 +9,7 @@ export type ExportAttempt = {
   svg: string;
   sizeMm: number;
   web: boolean;
+  requesterActive: () => boolean;
   currentKey: () => string;
   setBusy: (busy: boolean) => void;
   capture: (pixels: number) => Promise<string>;
@@ -31,6 +32,7 @@ export async function runExportAttempt(input: ExportAttempt): Promise<string> {
   try {
     const png = await input.capture(exportPixels(input.sizeMm));
     const ok = await input.decode(png, input.expected);
+    if (!input.requesterActive()) return "Export cancelled.";
     if (input.currentKey() !== input.key)
       return "The design changed while export was prepared. Try again.";
     const accepted = input.acceptVerification({

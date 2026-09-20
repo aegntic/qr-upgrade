@@ -43,6 +43,7 @@ export default function Export() {
       svg: generated.svg,
       sizeMm: draft.sizeMm,
       web: Platform.OS === "web",
+      requesterActive: () => mounted.current,
       currentKey: () => currentKey.current,
       setBusy: (next) => {
         if (mounted.current) setBusy(next);

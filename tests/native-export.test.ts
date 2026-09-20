@@ -44,6 +44,7 @@ test("failed decode prevents export and every failure clears busy state", async 
     svg: "<svg/>",
     sizeMm: 70,
     web: true,
+    requesterActive: () => true,
     currentKey: () => "render:4",
     setBusy: (value) => busy.push(value),
     capture: async () => png,
@@ -65,6 +66,7 @@ test("failed decode prevents export and every failure clears busy state", async 
     svg: "<svg/>",
     sizeMm: 70,
     web: true,
+    requesterActive: () => true,
     currentKey: () => "render:4",
     setBusy: (value) => busy.push(value),
     capture: async () => png,
@@ -76,4 +78,107 @@ test("failed decode prevents export and every failure clears busy state", async 
   });
   assert.equal(exportError, "PDF preparation failed. Try again.");
   assert.deepEqual(busy, [true, false]);
+});
+
+test("inactive requester after deferred decode cannot verify or export", async () => {
+  let active = true;
+  let finishDecode: ((value: boolean) => void) | undefined;
+  let verifications = 0;
+  let exports = 0;
+  const busy: boolean[] = [];
+  const attempt = runExportAttempt({
+    format: "pdf",
+    key: "render:4",
+    expected: "expected",
+    svg: "<svg/>",
+    sizeMm: 70,
+    web: true,
+    requesterActive: () => active,
+    currentKey: () => "render:4",
+    setBusy: (value) => busy.push(value),
+    capture: async () => png,
+    decode: () =>
+      new Promise<boolean>((resolve) => {
+        finishDecode = resolve;
+      }),
+    acceptVerification: () => {
+      verifications += 1;
+      return true;
+    },
+    exportFile: async () => {
+      exports += 1;
+    },
+  });
+  await Promise.resolve();
+  active = false;
+  assert.ok(finishDecode);
+  finishDecode(true);
+  assert.equal(await attempt, "Export cancelled.");
+  assert.equal(verifications, 0);
+  assert.equal(exports, 0);
+  assert.deepEqual(busy, [true, false]);
+});
+
+test("stale render key and rejected verification each prevent export", async () => {
+  for (const refusal of ["stale-key", "rejected-verification"] as const) {
+    let verificationCalls = 0;
+    let exports = 0;
+    const message = await runExportAttempt({
+      format: "png",
+      key: "render:4",
+      expected: "expected",
+      svg: "<svg/>",
+      sizeMm: 70,
+      web: true,
+      requesterActive: () => true,
+      currentKey: () =>
+        refusal === "stale-key" ? "render:5" : "render:4",
+      setBusy: () => {},
+      capture: async () => png,
+      decode: async () => true,
+      acceptVerification: () => {
+        verificationCalls += 1;
+        return refusal !== "rejected-verification";
+      },
+      exportFile: async () => {
+        exports += 1;
+      },
+    });
+    assert.match(message, /design changed/);
+    assert.equal(
+      verificationCalls,
+      refusal === "stale-key" ? 0 : 1,
+      refusal,
+    );
+    assert.equal(exports, 0, refusal);
+  }
+});
+
+test("successful export receives the exact PNG accepted by decode", async () => {
+  let decodedPng = "";
+  let exportedPng = "";
+  const message = await runExportAttempt({
+    format: "pdf",
+    key: "render:4",
+    expected: "expected",
+    svg: "<svg/>",
+    sizeMm: 70,
+    web: true,
+    requesterActive: () => true,
+    currentKey: () => "render:4",
+    setBusy: () => {},
+    capture: async () => png,
+    decode: async (captured) => {
+      decodedPng = captured;
+      return true;
+    },
+    acceptVerification: () => true,
+    exportFile: async (_format, _svg, captured) => {
+      exportedPng = captured;
+    },
+  });
+  assert.equal(message, "Download started.");
+  assert.equal(decodedPng, png);
+  assert.equal(exportedPng, png);
+  assert.equal(exportedPng, decodedPng);
 });

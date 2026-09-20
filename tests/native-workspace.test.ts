@@ -5,6 +5,7 @@ import {
   workspaceLinks,
   type WorkspaceTarget,
 } from "../mobile/src/workspace-links";
+import { openWorkspaceUrl } from "../mobile/src/workspace-opener.web";
 
 test("workspace handoff exposes only the frozen HTTPS allowlist", () => {
   assert.ok(Object.isFrozen(workspaceLinks));
@@ -23,21 +24,66 @@ test("workspace handoff exposes only the frozen HTTPS allowlist", () => {
   }
 });
 
-test("successful and failed browser opens cannot mutate draft or session state", async () => {
-  const state = Object.freeze({ draft: "local", session: "native-only" });
-  const before = JSON.stringify(state);
+test("workspace helper sends only exact allowlisted URLs", async () => {
   const opened: string[] = [];
   for (const target of Object.keys(workspaceLinks) as WorkspaceTarget[])
     await openWorkspaceTarget(target, (url) => {
       opened.push(url);
     });
   assert.deepEqual(opened, Object.values(workspaceLinks));
-  assert.equal(JSON.stringify(state), before);
   await assert.rejects(
     openWorkspaceTarget("account", async () => {
       throw new Error("offline");
     }),
     /offline/,
   );
-  assert.equal(JSON.stringify(state), before);
+});
+
+test("actual web opener creates an isolated tab without navigating the original window", async () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const originalLocation = { href: "https://preview.example/export" };
+  const calls: Array<unknown[]> = [];
+  let isolated = false;
+  const tab = {
+    set opener(value: unknown) {
+      calls.push(["opener", value]);
+      isolated = value === null;
+    },
+    location: {
+      replace(url: string) {
+        calls.push(["replace", url, isolated]);
+      },
+    },
+  };
+  const fakeWindow = {
+    location: originalLocation,
+    open(url: string, target: string) {
+      calls.push(["open", url, target]);
+      return tab;
+    },
+  };
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: fakeWindow,
+  });
+  try {
+    await openWorkspaceUrl(workspaceLinks.designs);
+    assert.deepEqual(calls, [
+      ["open", "about:blank", "_blank"],
+      ["opener", null],
+      ["replace", workspaceLinks.designs, true],
+    ]);
+    assert.equal(originalLocation.href, "https://preview.example/export");
+
+    fakeWindow.open = (url: string, target: string) => {
+      calls.push(["blocked", url, target]);
+      return null as unknown as typeof tab;
+    };
+    await assert.rejects(openWorkspaceUrl(workspaceLinks.account), /blocked the new tab/);
+    assert.equal(originalLocation.href, "https://preview.example/export");
+  } finally {
+    if (previousWindow)
+      Object.defineProperty(globalThis, "window", previousWindow);
+    else delete (globalThis as { window?: unknown }).window;
+  }
 });
