@@ -44,7 +44,7 @@ async function signedSession(r:Request,c:AccountConfig){
  return {id:p.sub,name:p.name,email:p.email,version:Number(p.sv)};
  }catch{return null;}
 }
-async function currentSession(r:Request,c:AccountConfig,deps:AccountDeps={}){
+export async function currentSession(r:Request,c:AccountConfig,deps:AccountDeps={}){
  const session=await signedSession(r,c);if(!session)return null;
  const state=await securityService('session',session.id,c,deps);
  if(!state)return null;

@@ -1,3 +1,4 @@
+import { accountExportRequest } from "./account-export.mjs";
 import { accountRequest, securityCleanupStatements } from "./account.mjs";
 import { cloudRequest } from "./cloud.mjs";
 import { linksRequest, resolveLink } from "./links.mjs";
@@ -42,6 +43,7 @@ export default {
   const url=new URL(request.url);
   if(url.pathname==='/health'&&request.method==='GET')return reply({ready:!!env.DB&&!!env.AI,model:env.AI_MODEL});
   try {
+   if(url.pathname==='/account/export'||url.pathname.startsWith('/account/export/'))return await accountExportRequest(request,env);
    if(url.pathname.startsWith('/account/'))return await accountRequest(request,env);
    if(url.pathname==='/links'||url.pathname.startsWith('/links/'))return await linksRequest(request,env);
    if(url.pathname.startsWith('/resolve/'))return await resolveLink(request,env);
