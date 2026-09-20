@@ -2,7 +2,7 @@
 import {useEffect,useRef,useState} from 'react';
 import Link from 'next/link';
 
-const sections=[['profile','Account profile'],['designs','Cloud design metadata and file list'],['links','Dynamic links'],['scans','Daily scan totals'],['pages','Hosted page drafts and published versions'],['assets','Uploaded asset metadata and file list'],['feedback','Received feedback'],['billing_customer','App billing customer linkage'],['billing_events','App billing event metadata'],['security','Retained security activity']] as const;
+const sections=[['profile','Account profile'],['designs','Cloud design details and file list'],['links','Dynamic links'],['scans','Daily scan totals'],['pages','Hosted page drafts and published versions'],['assets','Uploaded file details and file list'],['feedback','Received feedback'],['billing_customer','Billing account details'],['billing_events','Billing activity'],['security','Retained security activity']] as const;
 type Section=typeof sections[number][0];
 type Progress={parts:number;records:number;cursor:string|null;complete:boolean};
 type FileEntry={id:string;name:string;file:{status:'ready_to_request'|'unavailable_pending';download:string|null}};
@@ -42,15 +42,15 @@ export default function AccountExportPanel({disabled=false}:{disabled?:boolean})
   finally{if(!request.signal.aborted)setBusy(false);}
  }
  return <section className="account-export" aria-labelledby="account-export-title"><h2 id="account-export-title">Download your account data</h2>
-  <p>Save each section, one part at a time. Archived and pending records are included. Cloud design JSON and uploaded originals are separate downloads in their file lists; metadata does not mean those files have been saved.</p>
-  <p>These are live pages of data, not an atomic snapshot. Edits, new activity or retention cleanup during export can change later parts. Security activity covers the latest 100 events for up to 30 days.</p>
+  <p>Save each section, one part at a time. Archived and pending records are included. Cloud design JSON and uploaded originals are separate downloads in their file lists; saving their details does not mean those files have been saved.</p>
+  <p>Each part reflects your data when you request it. Changes you make, new activity or removal of older records while downloading can affect later parts. Security activity covers the latest 100 events for up to 30 days.</p>
   <p><Link href="/designs">On-device designs</Link> stay in this browser and need separate local exports. Anonymous artwork jobs use a separate browser identity and are not included. Independent Stripe receipts are separate; use <Link href="/billing">Billing</Link> to access your billing account. Account export remains available after downgrade and during billing outages.</p>
   <label htmlFor="export-section">Section</label><select id="export-section" value={section} disabled={busy||disabled} onChange={event=>{setSection(event.target.value as Section);setFiles([]);setRequested([]);setError('');setRetryPart(false);setNotice('');}}>{sections.map(([value,label])=><option key={value} value={value}>{label}{progress[value]?.complete?' — all parts requested':''}</option>)}</select>
-  <p>{state.parts} part{state.parts===1?'':'s'} requested · {state.records} records in those parts. {state.complete?'No further parts in this section.':'More parts may be available.'}</p>
-  <button disabled={busy||disabled||state.complete} onClick={downloadPart}>{busy?'Preparing download…':retryPart?'Retry this part':`Download part ${state.parts+1}`}</button>
+  <p>{state.parts} part{state.parts===1?'':'s'} requested · {state.records} record{state.records===1?'':'s'} in those parts. {state.complete?'No further parts in this section.':'More parts may be available.'}</p>
+  <button disabled={busy||disabled||state.complete} onClick={downloadPart}>{state.complete?'All parts requested':busy?'Preparing download…':retryPart?'Retry this part':`Download part ${state.parts+1}`}</button>
   {state.parts>0&&<button disabled={busy||disabled} onClick={()=>{setProgress(previous=>({...previous,[section]:{...initial}}));setFiles([]);setRequested([]);setError('');setRetryPart(false);setNotice('Section restarted. Existing downloads stay on your device.');}}>Restart this section</button>}
   <div role="status" aria-live="polite">{notice}</div>{error&&<p className="account-error" role="alert">{error} {retryPart?'Retry this part to continue.':'Use the file download button to retry.'}</p>}
-  {files.length>0&&<div><h3>Files from part {state.parts}</h3><p>Save the originals you want before moving to another section or part. Ready means a download can be requested; missing objects will show an error.</p><ul>{files.map(file=><li key={file.id}><span>{file.name}</span>{file.file.download?<button disabled={busy||disabled} onClick={()=>downloadFile(file)}>{requested.includes(file.id)?'Download again':'Download original'}</button>:<span>Pending — file unavailable</span>}{requested.includes(file.id)&&<small>Download requested; confirm it was saved.</small>}</li>)}</ul></div>}
+  {files.length>0&&<div><h3>Files from part {state.parts}</h3><p>Save the originals you want before moving to another section or part. Ready means a download can be requested; missing files will show an error.</p><ul>{files.map(file=><li key={file.id}><span>{file.name}</span>{file.file.download?<button disabled={busy||disabled} onClick={()=>downloadFile(file)}>{requested.includes(file.id)?'Download again':'Download original'}</button>:<span>Pending — file unavailable</span>}{requested.includes(file.id)&&<small>Download requested; confirm it was saved.</small>}</li>)}</ul></div>}
   <details><summary>Section progress</summary><ul>{sections.map(([value,label])=><li key={value}>{label}: {progress[value]?.parts??0} parts requested{progress[value]?.complete?' (no further parts)':''}</li>)}</ul></details>
  </section>;
 }
