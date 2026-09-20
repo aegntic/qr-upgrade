@@ -237,9 +237,14 @@ export default function LibraryScreen() {
         />
         <Card>
           <Copy>
-            Web editing and export still work, but this browser does not create
-            a local library or store a weaker browser copy.
+            You can still edit and export in this web preview. Open the Android
+            or iOS app to keep a private device library.
           </Copy>
+          <Button
+            title="Account & cloud workspace"
+            secondary
+            onPress={() => router.push("/workspace")}
+          />
           <Button title="Return to Create" onPress={() => router.back()} />
         </Card>
       </Page>
@@ -425,6 +430,12 @@ export default function LibraryScreen() {
           {libraryBusy}
         </Text>
       ) : null}
+
+      <Button
+        title="Account & cloud workspace"
+        secondary
+        onPress={() => router.push("/workspace")}
+      />
 
       <LibraryTitleDialog
         visible={!!renameTarget}

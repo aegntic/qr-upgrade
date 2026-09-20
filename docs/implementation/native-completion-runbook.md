@@ -2,7 +2,7 @@
 
 ## Implemented core boundary (21 September 2026)
 
-The library model, native storage/image adapters, injected persistence engine and Create/library UI are integrated. Save identity, dirty/discard handling and owned image-session cleanup now live in the shared draft provider. Destination forms, workspace links and web PDF remain separate tasks. Nothing automatically saves the current draft.
+The library model, native storage/image adapters, injected persistence engine, Create/library UI, all ten destination forms, browser workspace handoff and Expo-web PDF download are integrated. Save identity, dirty/discard handling and owned image-session cleanup live in the shared draft provider. Nothing automatically saves the current draft.
 
 Native storage uses `Paths.document/qrupgrade-library-v1/<UUID>/<generation>.qru`. `QRUL1|1|<UUID>|<generation>\n` is authenticated as AES-GCM AAD; the sealed bytes contain a fresh 12-byte nonce and 16-byte tag. All title/destination/settings/image bytes are encrypted together with a generated 256-bit installation key. SecureStore stores only the 64-character hex key, using the fixed `qrupgrade.local-library.key.v1` service and item, `WHEN_UNLOCKED_THIS_DEVICE_ONLY`, and `requireAuthentication: false`. The accessibility choice is an iOS keychain setting; do not claim a separate Android locked-device authentication gate.
 
@@ -21,6 +21,17 @@ Implemented UI behavior (21 September 2026):
 - Retired sessions are released only after asynchronous artwork, scene and save-normalization consumers plus the UI transition settle. Save acquires its session lease synchronously before asset normalization yields and releases it in `finally`. Provider unmount/reset follows the same owned-session path; picker originals and durable ciphertext are outside it.
 - Storage errors retain the current draft and expose retry. Missing or malformed key state adds a separately confirmed `Delete inaccessible local saves` action. Web shows the typed unsupported explanation and does not invoke list/save/open or browser persistence.
 - Shared controls now use obsidian surfaces, steel text/borders and cool backlit accents in dark mode, with a readable cool-neutral light counterpart. User-selected artwork and QR output colors remain unchanged.
+
+## Destination, workspace and Expo-web export contract
+
+Implemented behavior (21 September 2026):
+
+- Create exposes the shared Website, Text, Phone call, SMS, Email, WhatsApp, Coordinates, Calendar event, Wi-Fi and Contact encoders. The form writes the existing shared `Content` fields and displays the shared encoder error; it does not add a second encoding or validation path. Save/reopen continues to persist only fields belonging to the active type.
+- Wi-Fi security has explicit WPA, WEP and Open choices, password masking and a hidden-network switch. The pure security transition clears the password immediately when Open is chosen, while secured SSID/password whitespace remains untouched. The visible default follows the existing password-derived WPA/Open fallback.
+- Contact includes company, job title, website and address. Calendar inputs use the explicit `YYYY-MM-DDTHH:mm` local format and an optional IANA timezone. The timezone labels the local values in the existing encoder; the app does not convert between zones or resolve daylight-saving ambiguity.
+- Account & cloud workspace opens only the fixed HTTPS routes `/account`, `/cloud-designs`, `/links` and `/content` on `qrupgrade.com`. It accepts no URL, payload, query, fragment, callback or session data. The browser site owns its own account session. A failed open keeps the local draft and offers a retry. Expo web creates an isolated tab because Expo Linking 57 replaces the current page on web; the in-memory preview draft remains open in its original tab.
+- Expo web dynamically loads the explicit mobile `jspdf` 4.2.1 dependency only when PDF is requested. It creates one square RGB page from the already captured and successfully decoded PNG, places that PNG edge-to-edge at the selected 10–2,000 mm physical width, then starts a `.pdf` download. Invalid sizes, PNG parsing and PDF preparation failures do not download and clear the busy state. Android/iOS retain the existing Expo Print-to-file and share path.
+- Export still snapshots the generated output and render-epoch verification key before capture. A delayed decode/verification callback for an older key is rejected, and a failed exact decode cannot reach either native sharing or web download.
 
 1. Call `purgeStaleLibraryImageCache()` once on cold startup, before creating any saved-design working session or starting renders that consume one. It deletes only `qrupgrade-working` and `qrupgrade-normalizing` under private cache. Never call this purge during a live session.
 2. At explicit Save click, copy the current editable draft, including nested content/appearance. Normalize that same captured draft with `captureLibraryAssets()`, then pass the captured draft and returned assets to `localLibrary.save()`. A new save has no ID; changes require the saved ID and `expectedGeneration`. Busy/conflicting controls belong to the UI. Edits made during normalization/save must not be marked clean unless they still match the captured values.
@@ -54,7 +65,9 @@ Use exact Node 22.23.2 (the checked-in `.nvmrc`). From repository root:
 ```sh
 PATH=/home/ae/.local/share/mise/installs/node/22.23.2/bin:$PATH node --import tsx --test --test-reporter=spec tests/native-library.test.ts
 PATH=/home/ae/.local/share/mise/installs/node/22.23.2/bin:$PATH node --import tsx --test --test-reporter=spec tests/native-library-ui.test.ts
+PATH=/home/ae/.local/share/mise/installs/node/22.23.2/bin:$PATH node --import tsx --test --test-reporter=spec tests/native-destinations.test.ts tests/native-workspace.test.ts tests/native-export.test.ts tests/destination-payloads.test.ts
 PATH=/home/ae/.local/share/mise/installs/node/22.23.2/bin:$PATH npm --prefix mobile run typecheck
+PATH=/home/ae/.local/share/mise/installs/node/22.23.2/bin:$PATH npm run typecheck
 ```
 
 For a core-only preflight, create a temporary `mobile/src/.local-library-preflight.ts` exporting `localLibrary` from `./local-library` and all helpers from `./local-library-images`. From `mobile`, bundle it independently, then remove the temporary entry:
@@ -74,7 +87,7 @@ QR_EXPORT_DIR=$(mktemp -d /tmp/qrupgrade-native-library-ui.XXXXXX)
 PATH=/home/ae/.local/share/mise/installs/node/22.23.2/bin:$PATH npx expo export --platform all --output-dir "$QR_EXPORT_DIR" --clear
 ```
 
-The final 21 September 2026 integration export succeeded for Android, iOS, the web client, and all seven static routes including `/library`. This establishes dependency and route bundling only; it is not installed-app or device execution.
+The final 21 September 2026 integration export succeeded for Android, iOS, the web client, and all eight static routes including `/library` and `/workspace`. The web output has a separate lazy `jspdf.es` chunk. Separate non-minified Android and iOS `export:embed` bundles were also searched and contained no `jspdf`, `html2canvas`, `dompurify`, web PDF-size error or anchor-download implementation strings. This establishes dependency and route bundling only; it is not installed-app or device execution.
 
 ## Required actual runtime evidence after UI integration
 
@@ -88,4 +101,4 @@ Record platform/build identity and pass/fail rather than inferring success from 
 - Owned session cleanup after asynchronous render work settles, navigation/unmount/reset, and cold-start purge; picker originals and durable saves remain untouched.
 - Physical phones, memory pressure, power interruption, backup/restore and distribution behavior remain unverified until exercised. Simulator tests cannot establish all physical-device guarantees.
 
-Workspace browser roundtrip and PNG/PDF export/share runtime checks are required after their separate implementation tasks. This core task does not implement those flows.
+Workspace browser roundtrip and PNG/PDF export/share runtime checks remain required on installed builds and representative browsers. Source tests and exports do not establish browser popup policy, downloaded-file behavior, native share completion, physical dimensions after a downstream print workflow or device execution.

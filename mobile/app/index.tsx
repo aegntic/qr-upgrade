@@ -19,6 +19,8 @@ import {
   useTheme,
 } from "../src/ui";
 import { Symbol } from "../src/symbol";
+import { DestinationFields } from "../src/destination-fields";
+import { destinationOptions } from "../src/destination-options";
 export default function Create() {
   const {
       draft,
@@ -96,7 +98,32 @@ export default function Create() {
         : "Save on this device";
   return (
     <Page>
-      <View style={{ alignItems: "flex-end" }}>
+      <View
+        style={{
+          flexDirection: "row",
+          flexWrap: "wrap",
+          justifyContent: "flex-end",
+          gap: 8,
+        }}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open account and cloud workspace"
+          onPress={() => router.push("/workspace")}
+          style={({ pressed }) => ({
+            minHeight: 44,
+            justifyContent: "center",
+            paddingHorizontal: 14,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: t.line,
+            backgroundColor: pressed ? t.panelRaised : t.panel,
+          })}
+        >
+          <Text style={{ color: t.ink, fontWeight: "700" }}>
+            Account & cloud
+          </Text>
+        </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Open saved design library"
@@ -180,71 +207,11 @@ export default function Create() {
       <Choices
         label="QR content"
         value={draft.content.type}
-        options={[
-          { value: "url", label: "Website" },
-          { value: "wifi", label: "Wi-Fi" },
-          { value: "vcard", label: "Contact" },
-        ]}
+        options={[...destinationOptions]}
         onChange={(type) => content({ type })}
       />
       <Card>
-        {draft.content.type === "url" ? (
-          <Field
-            label="Website address"
-            value={draft.content.url}
-            onChangeText={(url) => content({ url })}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-            maxLength={1200}
-          />
-        ) : draft.content.type === "wifi" ? (
-          <>
-            <Field
-              label="Network name"
-              value={draft.content.ssid}
-              onChangeText={(ssid) => content({ ssid })}
-              autoCapitalize="none"
-              maxLength={100}
-            />
-            <Field
-              label="Wi-Fi password"
-              value={draft.content.password}
-              onChangeText={(password) => content({ password })}
-              secureTextEntry
-              autoCapitalize="none"
-              maxLength={200}
-            />
-            <Copy muted size={12}>
-              Your password is encoded in the QR. Anyone who scans it can read
-              it.
-            </Copy>
-          </>
-        ) : (
-          <>
-            <Field
-              label="Full name"
-              value={draft.content.name}
-              onChangeText={(name) => content({ name })}
-              maxLength={100}
-            />
-            <Field
-              label="Email"
-              value={draft.content.email}
-              onChangeText={(email) => content({ email })}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              maxLength={150}
-            />
-            <Field
-              label="Phone"
-              value={draft.content.phone}
-              onChangeText={(phone) => content({ phone })}
-              keyboardType="phone-pad"
-              maxLength={40}
-            />
-          </>
-        )}
+        <DestinationFields content={draft.content} onChange={content} />
         {generated.error ? (
           <Text accessibilityRole="alert" style={{ color: t.error }}>
             {generated.error}
