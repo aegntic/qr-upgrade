@@ -16,7 +16,13 @@ scripts/
 README.md
 DESIGN.md
 PRODUCT.md
-workers/
+# Next server routes reuse these two validation modules. Keep the Worker runtime,
+# migrations and private configuration out of the Vercel source package.
+workers/*
+!workers/qr-service/
+workers/qr-service/*
+!workers/qr-service/content.mjs
+!workers/qr-service/links.mjs
 .workflows/
 docs/
 
