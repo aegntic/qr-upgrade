@@ -1,0 +1,14 @@
+.composition-search { display: block; margin: 0 0 12px; }
+.composition-empty { grid-column: 1 / -1; margin: 8px 0; color: var(--muted); font-size: 12px; }
+.composition-controls { display: grid; gap: 13px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.caption-controls { display: grid; gap: 12px; margin: 18px 0 0; padding: 16px; border: 1px solid var(--line); border-radius: 7px; }
+.caption-controls legend { padding: 0 6px; font-size: 11px; font-weight: 650; }
+.composition-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: end; }
+.preview-full-button { width: 100%; border: 0; background: transparent; color: var(--forest); padding: 9px; font-size: 11px; text-decoration: underline; text-underline-offset: 3px; }
+.qr-preview-dialog { width: min(92vw, 860px); max-height: 94vh; padding: 18px; border: 1px solid #ffffff55; border-radius: 12px; background: #171a18; color: white; box-shadow: 0 28px 90px #0008; }
+.qr-preview-dialog::backdrop { background: #10130fcf; backdrop-filter: blur(6px); }
+.qr-preview-dialog-bar { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 14px; }
+.qr-preview-dialog-bar h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.qr-preview-dialog-bar button { display: grid; place-items: center; border: 1px solid #ffffff44; border-radius: 50%; width: 34px; height: 34px; background: #ffffff12; color: white; }
+.qr-preview-dialog > img { display: block; width: min(100%, calc(94vh - 90px)); height: auto; margin: auto; background: white; }
+@media (max-width: 560px) { .composition-row { grid-template-columns: 1fr; } .qr-preview-dialog { padding: 12px; } }

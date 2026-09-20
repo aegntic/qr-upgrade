@@ -40,6 +40,8 @@ import { createQrImage } from "@/lib/browser-art";
 import { exportQR, readLocalImage, validateRendered } from "@/lib/browser-qr";
 import { artworkDesigns } from "@/lib/artwork-designs";
 import { DestinationIcon } from "./destination-icon";
+import { QrPreviewDialog } from "./qr-preview-dialog";
+import "../app/composition.css";
 import artProofs from "@/lib/artwork-proofs.json";
 import {
   destinations,
@@ -93,6 +95,7 @@ export default function GeneratorStudio({
   initialArtwork,
   brandStudy: incomingBrandStudy,
   resume = false,
+  resumeRequested = false,
   initialType = "website",
   initialMode,
   samplePortrait = false,
@@ -100,6 +103,7 @@ export default function GeneratorStudio({
   initialArtwork?: (typeof artworkDesigns)[number]["id"];
   brandStudy?: Study;
   resume?: boolean;
+  resumeRequested?: boolean;
   initialType?: DestinationId;
   initialMode?: GeneratorMode;
   samplePortrait?: boolean;
@@ -112,6 +116,7 @@ export default function GeneratorStudio({
   const [name, setName] = useState(seed?.name || 'Untitled QR');
   const [saving, setSaving] = useState(false);
   const [destinationQuery, setDestinationQuery] = useState('');
+  const [designQuery, setDesignQuery] = useState("");
   const [adjustments, setAdjustments] = useState(seed?.adjustments || defaultImageAdjustments);
   const [caption, setCaption] = useState(seed?.caption || defaultCaption);
   const [logoFrame, setLogoFrame] = useState<'plain' | 'metal'>(seed?.logoFrame || 'plain');
@@ -143,7 +148,7 @@ export default function GeneratorStudio({
     seed?.strength ?? brandStudy?.strength ?? artProofs[initialArtwork || "dragon"].strength,
   );
   const [sizeMm, setSizeMm] = useState(seed?.sizeMm ?? 70);
-  const [format, setFormat] = useState<"png" | "svg" | "pdf">("png");
+  const [format, setFormat] = useState<"png" | "svg" | "pdf" | "jpg" | "webp">("png");
   const [showUtm, setShowUtm] = useState(seed?.showUtm ?? false);
   const [utm, setUtm] = useState(seed?.utm || { source: "", medium: "", campaign: "" });
   const [result, setResult] = useState<Rendered | null>(null);
@@ -154,16 +159,19 @@ export default function GeneratorStudio({
   } | null>(null);
   const [message, setMessage] = useState("");
   const [attemptedDestination, setAttemptedDestination] = useState(false);
-  const [uploading, setUploading] = useState("");
+  const [uploading, setUploading] = useState({ image: false, logo: false });
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const uploadInput = useRef<HTMLInputElement>(null),
     logoInput = useRef<HTMLInputElement>(null);
   const uploads = useRef({ image: 0, logo: 0 });
+  const stateEpoch = useRef(0);
   const destinationDrafts = useRef<Partial<Record<DestinationId, string>>>(seed?.destinationDrafts || {});
   const destinationFields = useRef<HTMLDivElement>(null);
   const designHeading = useRef<HTMLHeadingElement>(null);
   const previewHeading = useRef<HTMLHeadingElement>(null);
   const kindInfo = destinations.find((d) => d.id === kind)!;
+  const uploadsBusy = uploading.image || uploading.logo;
   const previewSample =
     mode === "custom"
       ? modes[0].image
@@ -210,7 +218,10 @@ export default function GeneratorStudio({
     strength,
     logo,
     logoSize,
+    logoFrame,
     sizeMm,
+    adjustments,
+    caption,
   ]);
   const current = result?.key === key ? result : null;
   const renderError = failure?.key === key ? failure.message : "";
@@ -240,11 +251,13 @@ export default function GeneratorStudio({
           encoded.text,
           strength,
           logo
-            ? { src: logo, sizePercent: logoSize, frame: "plain" }
+            ? { src: logo, sizePercent: logoSize, frame: logoFrame }
             : undefined,
           mode !== "custom",
+          { adjustments, caption },
         );
-        if (mode === "custom" && !logo && encoded.matrix)
+        const identityAdjustments = JSON.stringify(adjustments) === JSON.stringify(defaultImageAdjustments);
+        if (mode === "custom" && !logo && !caption.text.trim() && identityAdjustments && encoded.matrix)
           rendered.svg = qrSvg(encoded.matrix, appearance);
         const proof = await validateRendered(rendered.svg, encoded.text, {
           sizeMm,
@@ -279,9 +292,12 @@ export default function GeneratorStudio({
     strength,
     logo,
     logoSize,
+    logoFrame,
     sizeMm,
     mode,
     appearance,
+    adjustments,
+    caption,
   ]);
   useEffect(
     () => () => {
@@ -296,20 +312,22 @@ export default function GeneratorStudio({
     customImage, logo, logoSize, logoFrame, strength, sizeMm, showUtm, utm, adjustments, caption, name,
     destinationDrafts: { ...destinationDrafts.current },
   }), [kind, content, mode, appearance, template, art, brandStudy, studyActive, customImage, logo, logoSize, logoFrame, strength, sizeMm, showUtm, utm, adjustments, caption, name]);
-  const artifact = useMemo(() => current && encoded.matrix && !uploading ? {
+  const artifact = useMemo(() => current && encoded.matrix && !uploadsBusy ? {
     png: current.png, svg: current.svg, text: encoded.text, sizeMm, modules: encoded.matrix.size,
     pristine: current.pristine, reduced: current.reduced, simulated: current.simulated, dimensionsPass,
-  } : null, [current, encoded.matrix, encoded.text, sizeMm, dimensionsPass, uploading]);
+  } : null, [current, encoded.matrix, encoded.text, sizeMm, dimensionsPass, uploadsBusy]);
   useEffect(() => { workflow.setDesign(draft, artifact, savedId); }, [draft, artifact, savedId, workflow.setDesign]);
   async function save() {
-    if (!artifact || saving || uploading) return;
+    if (!artifact || saving || uploadsBusy) return;
+    const epoch = stateEpoch.current;
+    const capturedName = draft.name;
     setSaving(true);
-    try { const item = await saveDesign(draft, artifact, savedId); setSavedId(item.id); setName(item.name); setMessage('Saved in this browser. Open My designs to revisit it.'); }
-    catch (e) { setMessage(e instanceof Error ? e.message : 'Could not save the design.'); }
-    finally { setSaving(false); }
+    try { const item = await saveDesign(draft, artifact, savedId); if (epoch === stateEpoch.current) { setSavedId(item.id); setName((value) => value === capturedName ? item.name : value); setMessage('Saved in this browser. Open My designs to revisit it.'); } }
+    catch (e) { if (epoch === stateEpoch.current) setMessage(e instanceof Error ? e.message : 'Could not save the design.'); }
+    finally { if (epoch === stateEpoch.current) setSaving(false); }
   }
   function testDesign() {
-    if (!artifact || uploading) return;
+    if (!artifact || uploadsBusy) return;
     workflow.setDesign(draft, artifact, savedId);
     router.push('/scan-lab');
   }
@@ -353,18 +371,22 @@ export default function GeneratorStudio({
     setMessage("");
   }
   function chooseArt(id: typeof art) {
+    uploads.current.image++;
+    setUploading((active) => ({ ...active, image: false }));
     setArt(id);
     setStudyActive(false);
     setStrength(artProofs[id].strength);
   }
   function chooseTemplate(index: number) {
+    uploads.current.image++;
+    setUploading((active) => ({ ...active, image: false }));
     setAppearance(templates[index]);
     setTemplate(templates[index].name);
   }
   async function selectFile(file: File | undefined, target: "image" | "logo") {
     if (!file) return;
     const request = ++uploads.current[target];
-    setUploading(target);
+    setUploading((active) => ({ ...active, [target]: true }));
     setMessage("");
     try {
       const image = await readLocalImage(file);
@@ -384,10 +406,12 @@ export default function GeneratorStudio({
         );
     } finally {
       if (request === uploads.current[target])
-        setUploading((active) => (active === target ? "" : active));
+        setUploading((active) => ({ ...active, [target]: false }));
     }
   }
   function reset() {
+    if (saving) return;
+    stateEpoch.current++;
     destinationDrafts.current = {};
     setAttemptedDestination(false);
     uploads.current.image++;
@@ -413,7 +437,7 @@ export default function GeneratorStudio({
     setShowUtm(false);
     setMoreTypes(false);
     setSizeMm(70);
-    setUploading("");
+    setUploading({ image: false, logo: false });
     setResult(null);
     setRenderEpoch((value) => value + 1);
     setMessage("Draft cleared. Your downloaded files are unchanged.");
@@ -436,11 +460,11 @@ export default function GeneratorStudio({
     );
   }
   async function download() {
-    if (!ready || !current || uploading || exporting) return;
+    if (!ready || !current || uploadsBusy || exporting) return;
     setExporting(true);
     setMessage("");
     try {
-      await exportQR(current.svg, format, sizeMm, name);
+      await exportQR(current.svg, format, sizeMm, name, encoded.text);
       setMessage(
         "Downloaded. Test your QR on a phone and a physical proof before printing a batch.",
       );
@@ -469,7 +493,7 @@ export default function GeneratorStudio({
         <div className="generator-controls">
           <section className="generator-step">
             <Step number="1" title="Your destination" />
-            {resume && !seed && <p className="workflow-notice">That unsaved session has ended. <Link href="/designs">Open a saved design</Link>, or create a new one below.</p>}
+            {resumeRequested && !seed && <p className="workflow-notice">That unsaved session has ended. <Link href="/designs">Open a saved design</Link>, or create a new one below.</p>}
             <label className="workflow-search destination-search"><input aria-label="Search destinations" placeholder="Search destinations — Wi-Fi, contact, event…" value={destinationQuery} onChange={e=>{setDestinationQuery(e.target.value);if(e.target.value)setMoreTypes(true);}}/></label>
             <p className="destination-intro">What would you like to share?</p>
             <div
@@ -620,9 +644,7 @@ export default function GeneratorStudio({
                   aria-pressed={mode === m.id}
                   onClick={() => {
                     uploads.current.image++;
-                    setUploading((active) =>
-                      active === "image" ? "" : active,
-                    );
+                    setUploading((active) => ({ ...active, image: false }));
                     setMode(m.id);
                     setTab("Designs");
                     setMessage("");
@@ -717,9 +739,15 @@ export default function GeneratorStudio({
                       </button>
                     )}
                   </div>
+                  {mode !== "image" && (
+                    <label className="composition-search">
+                      <span className="sr-only">Search {mode === "custom" ? "templates" : "artwork"}</span>
+                      <input value={designQuery} onChange={(event) => setDesignQuery(event.target.value)} placeholder={`Search ${mode === "custom" ? "templates" : "artwork"}…`} />
+                    </label>
+                  )}
                   {mode === "custom" ? (
                     <div className="qr-template-grid">
-                      {templates.map((t, i) => (
+                      {templates.map((t, i) => ({ t, i })).filter(({ t }) => t.name.toLowerCase().includes(designQuery.trim().toLowerCase())).map(({ t, i }) => (
                         <button
                           key={t.name}
                           aria-label={`${t.name} template`}
@@ -735,11 +763,12 @@ export default function GeneratorStudio({
                           <span>{t.name}</span>
                         </button>
                       ))}
+                      {templates.every((t) => !t.name.toLowerCase().includes(designQuery.trim().toLowerCase())) && <p className="composition-empty" role="status">No templates match “{designQuery}”.</p>}
                     </div>
                   ) : mode === "art" ? (
                     <>
                       <div className="qr-template-grid art-template-grid">
-                        {artworkDesigns.map((d) => (
+                        {artworkDesigns.filter((d) => `${d.name} ${d.description}`.toLowerCase().includes(designQuery.trim().toLowerCase())).map((d) => (
                           <button
                             key={d.id}
                             aria-label={`${d.name} artwork`}
@@ -756,6 +785,7 @@ export default function GeneratorStudio({
                             <span>{d.name}</span>
                           </button>
                         ))}
+                        {artworkDesigns.every((d) => !`${d.name} ${d.description}`.toLowerCase().includes(designQuery.trim().toLowerCase())) && <p className="composition-empty" role="status">No artwork matches “{designQuery}”.</p>}
                       </div>
                       <p className="generator-note">
                         Choose an AI-created artwork and weave in your
@@ -773,7 +803,7 @@ export default function GeneratorStudio({
                     <>
                       <button
                         className="generator-upload"
-                        disabled={uploading === "image"}
+                        disabled={uploading.image}
                         onClick={() => uploadInput.current?.click()}
                       >
                         {customImage ? (
@@ -787,7 +817,7 @@ export default function GeneratorStudio({
                           <ImagePlus size={30} />
                         )}
                         <strong>
-                          {uploading === "image"
+                          {uploading.image
                             ? "Reading image…"
                             : customImage
                               ? "Replace your image"
@@ -807,7 +837,7 @@ export default function GeneratorStudio({
                 <div className="logo-controls">
                   <button
                     className="generator-upload"
-                    disabled={uploading === "logo"}
+                    disabled={uploading.logo}
                     onClick={() => logoInput.current?.click()}
                   >
                     {logo ? (
@@ -821,7 +851,7 @@ export default function GeneratorStudio({
                       <ImagePlus size={28} />
                     )}
                     <strong>
-                      {uploading === "logo"
+                      {uploading.logo
                         ? "Reading image…"
                         : logo
                           ? "Replace logo or photo"
@@ -839,12 +869,15 @@ export default function GeneratorStudio({
                         unit="%"
                         onChange={setLogoSize}
                       />
+                      <div className="shape-options" role="group" aria-label="Centre image frame">
+                        {(["plain", "metal"] as const).map((frame) => <button key={frame} aria-pressed={logoFrame === frame} onClick={() => setLogoFrame(frame)}>{frame === "plain" ? "Plain frame" : "Metal frame"}</button>)}
+                      </div>
                       <button
                         className="small-control"
                         onClick={() => {
                           uploads.current.logo++;
                           setLogo("");
-                          setUploading("");
+                          setUploading((active) => ({ ...active, logo: false }));
                         }}
                       >
                         Remove centre image
@@ -929,8 +962,25 @@ export default function GeneratorStudio({
                         Lower values preserve image detail. Increase protection
                         when a scan check fails.
                       </p>
+                      <div className="composition-controls">
+                        <Range label="Image zoom" value={adjustments.zoom} min={1} max={3} step={0.05} unit="×" onChange={(zoom) => setAdjustments((value) => ({ ...value, zoom }))} />
+                        <Range label="Horizontal position" value={adjustments.x} min={0} max={100} unit="%" onChange={(x) => setAdjustments((value) => ({ ...value, x }))} />
+                        <Range label="Vertical position" value={adjustments.y} min={0} max={100} unit="%" onChange={(y) => setAdjustments((value) => ({ ...value, y }))} />
+                        <Range label="Image opacity" value={adjustments.opacity} min={20} max={100} unit="%" onChange={(opacity) => setAdjustments((value) => ({ ...value, opacity }))} />
+                        <Range label="Image brightness" value={adjustments.brightness} min={50} max={150} unit="%" onChange={(brightness) => setAdjustments((value) => ({ ...value, brightness }))} />
+                        <button className="small-control" onClick={() => setAdjustments(defaultImageAdjustments)}><RotateCcw size={11} /> Reset image</button>
+                      </div>
                     </>
                   )}
+                  <fieldset className="caption-controls">
+                    <legend>Caption</legend>
+                    <label className="generator-field"><span>Caption text</span><input value={caption.text} maxLength={60} placeholder="Optional caption" onChange={(event) => setCaption((value) => ({ ...value, text: event.target.value }))} /></label>
+                    <div className="composition-row">
+                      <label className="generator-colour"><input type="color" aria-label="Caption band colour" value={caption.color} onChange={(event) => setCaption((value) => ({ ...value, color: event.target.value }))} /><span>Band colour<small>{caption.color.toUpperCase()}</small></span></label>
+                      <label className="generator-field"><span>Font</span><select value={caption.font} onChange={(event) => setCaption((value) => ({ ...value, font: event.target.value as typeof value.font }))}><option value="sans">Sans</option><option value="serif">Serif</option><option value="mono">Mono</option></select></label>
+                    </div>
+                    <div className="shape-options" role="group" aria-label="Caption position">{(["top", "bottom"] as const).map((position) => <button key={position} aria-pressed={caption.position === position} onClick={() => setCaption((value) => ({ ...value, position }))}>{position === "top" ? "Top" : "Bottom"}</button>)}</div>
+                  </fieldset>
                   <Range
                     label="Print width"
                     value={sizeMm}
@@ -1016,6 +1066,7 @@ export default function GeneratorStudio({
                 </div>
               )}
             </div>
+            {current && <button className="preview-full-button" onClick={() => setPreviewOpen(true)}>Open full-size preview</button>}
             <div className="generator-scan-status" aria-live="polite">
               <span>
                 {encoded.error
@@ -1073,7 +1124,7 @@ export default function GeneratorStudio({
               role="group"
               aria-label="Download format"
             >
-              {(["png", "svg", "pdf"] as const).map((f) => (
+              {(["png", "jpg", "webp", "svg", "pdf"] as const).map((f) => (
                 <button
                   key={f}
                   aria-pressed={format === f}
@@ -1085,7 +1136,7 @@ export default function GeneratorStudio({
             </div>
             <button
               className="generator-download"
-              disabled={!ready || exporting || !!uploading}
+              disabled={!ready || exporting || uploadsBusy}
               onClick={() => void download()}
             >
               {exporting ? (
@@ -1104,16 +1155,18 @@ export default function GeneratorStudio({
                   : "SVG document with the complete raster QR image."
                 : format === "pdf"
                   ? `RGB PDF · QR printed at ${sizeMm} mm.`
-                  : "High-resolution PNG · complete design included."}
+                  : format === "png"
+                    ? "High-resolution PNG · complete design included."
+                    : `${format.toUpperCase()} image · scan-checked after encoding.`}
             </p>
             <div className="workflow-save-panel">
               <label className="generator-field"><span>Design name & file name</span><input value={name} maxLength={80} onChange={e=>setName(e.target.value)}/></label>
-              <button className="workflow-wide" disabled={!artifact || !!uploading} onClick={testDesign}>Test this design <ArrowRight size={16}/></button>
-              <button className="workflow-wide" disabled={!artifact || saving || !!uploading} onClick={()=>void save()}>{saving ? 'Saving…' : savedId ? 'Save new version' : 'Save design'}</button>
+              <button className="workflow-wide" disabled={!artifact || uploadsBusy} onClick={testDesign}>Test this design <ArrowRight size={16}/></button>
+              <button className="workflow-wide" disabled={!artifact || saving || uploadsBusy} onClick={()=>void save()}>{saving ? 'Saving…' : savedId ? 'Save new version' : 'Save design'}</button>
               <Link href="/designs">My designs ↗</Link>
               <p className="generator-note">Save keeps the destination, images and any credentials in this browser. Clearing site data removes saved designs.</p>
             </div>
-            <button className="generator-reset" onClick={reset}>
+            <button className="generator-reset" disabled={saving} onClick={reset}>
               <RotateCcw size={12} /> Reset design
             </button>
             {samplePortrait &&
@@ -1135,6 +1188,7 @@ export default function GeneratorStudio({
           </button>
         </div>
       )}
+      <QrPreviewDialog open={previewOpen} src={current?.png || ""} onClose={() => setPreviewOpen(false)} />
     </section>
   );
 }

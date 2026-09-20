@@ -66,12 +66,15 @@ export function downloadBlob(blob: Blob, filename: string) {
 }
 export async function exportQR(
   svg: string,
-  format: "svg" | "png" | "pdf",
+  format: "svg" | "png" | "pdf" | "jpg" | "webp",
   sizeMm: number,
   filename = "qr-upgrade",
+  expectedText?: string,
 ) {
   const basename = filename.replace(/[^\p{L}\p{N} _.-]/gu, "").replace(/^\.+/, "").trim().slice(0, 80) || "qr-upgrade";
   if (format === "svg") {
+    if (expectedText && readCanvas(await rasterize(svg, 768)) !== expectedText)
+      throw new Error("The SVG failed its final scan check and was not downloaded.");
     const printSvg = svg.replace(
       'width="768" height="768"',
       `width="${sizeMm}mm" height="${sizeMm}mm"`,
@@ -84,6 +87,8 @@ export async function exportQR(
   }
   const pixels = Math.ceil(Math.max(768, (sizeMm / 25.4) * 300));
   const canvas = await rasterize(svg, Math.min(pixels, 6000));
+  if (expectedText && readCanvas(canvas) !== expectedText)
+    throw new Error("The export failed its full-size scan check and was not downloaded.");
   if (format === "png") {
     const blob = await new Promise<Blob>((resolve, reject) =>
       canvas.toBlob(
@@ -92,6 +97,36 @@ export async function exportQR(
       ),
     );
     downloadBlob(blob, `${basename}.png`);
+    return;
+  }
+  if (format === "jpg" || format === "webp") {
+    const mime = format === "jpg" ? "image/jpeg" : "image/webp";
+    const blob = await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob(
+        (value) => value ? resolve(value) : reject(new Error(`${format.toUpperCase()} export is not supported by this browser.`)),
+        mime,
+        0.92,
+      ),
+    );
+    if (blob.type !== mime)
+      throw new Error(`${format.toUpperCase()} export is not supported by this browser.`);
+    if (expectedText) {
+      const url = URL.createObjectURL(blob);
+      try {
+        const image = new Image();
+        image.src = url;
+        await image.decode();
+        const verification = document.createElement("canvas");
+        verification.width = image.width;
+        verification.height = image.height;
+        verification.getContext("2d")?.drawImage(image, 0, 0);
+        if (readCanvas(verification) !== expectedText)
+          throw new Error(`The ${format.toUpperCase()} failed its final scan check and was not downloaded.`);
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    }
+    downloadBlob(blob, `${basename}.${format}`);
     return;
   }
   const { jsPDF } = await import("jspdf");
