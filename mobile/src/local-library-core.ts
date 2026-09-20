@@ -4,7 +4,7 @@ import { Assets, DesignRecord, FileEntry, LibraryAdapters, LibraryError, Library
 export type LibraryRow =
   | { id: string; status: "saved"; generation: number; title: string; type: Draft["content"]["type"]; updatedAt: string }
   | { id: string; status: "damaged" | "unsupported" | "deleting"; message: string; recovery?: { generation: number; updatedAt: string } };
-export type LibraryListing = { rows: LibraryRow[]; issues: string[]; totalBytes: number };
+export type LibraryListing = { rows: LibraryRow[]; issues: string[]; totalBytes: number; recovery?: "unrecognized-files" };
 export type SaveInput = { title: string; draft: Draft; assets?: Assets; id?: string; expectedGeneration?: number };
 export type Library = {
   list(): Promise<LibraryListing>;
@@ -200,7 +200,7 @@ export function createLocalLibrary(a: LibraryAdapters): Library {
           rows.push(row);
         }
       }
-      return { rows, issues, totalBytes: (await inventory()).totalBytes };
+      return { rows, issues, totalBytes: (await inventory()).totalBytes, ...(scan.unknownEntries ? { recovery: "unrecognized-files" as const } : {}) };
     }),
     save: input => {
       // Capture the editable values and asset strings before yielding to the queue.

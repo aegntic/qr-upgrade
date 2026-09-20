@@ -9,7 +9,7 @@ import { encode } from "../mobile/node_modules/fast-png/lib/index.js";
 import { payload, Content } from "../shared/qr";
 import { autoFix } from "../shared/score";
 import { Draft, initialDraft, snapshotDraft } from "../mobile/src/draft-model";
-import { createLocalLibrary } from "../mobile/src/local-library-core";
+import { createLocalLibrary, type Library } from "../mobile/src/local-library-core";
 import { Assets, LibraryAdapters, LibraryError, LIMITS, frame, headerBytes, unframe, utf8, validateRecord } from "../mobile/src/local-library-model";
 
 const clone = <T>(v: T): T => structuredClone(v);
@@ -204,7 +204,7 @@ test("validated setting bounds include actual autoFix output", () => {
 test("unknown records stay untouched while other rows remain usable", async () => {
   const h = harness(), good = await h.library.save({ title: "Good", draft: draft() }), other = randomUUID();
   h.files.set(`${other}/1.qru`, utf8(`QRUL1|2|${other}|1\n${"a".repeat(100)}`));
-  const listing = await h.library.list(); assert(listing.rows.some(r => r.status === "unsupported")); assert.equal((await h.library.open(good.id)).title, "Good"); assert(h.files.has(`${other}/1.qru`));
+  const listing = await h.library.list(); assert(listing.rows.some(r => r.status === "unsupported")); assert.equal(listing.recovery, undefined); assert.equal((await h.library.open(good.id)).title, "Good"); assert(h.files.has(`${other}/1.qru`));
 });
 test("interrupted staging cleanup retries after restart and is counted against quota", async () => {
   const h = harness(); await h.library.save({ title: "Present", draft: draft() }); const id = [...h.files.keys()][0].split("/")[0];
@@ -287,7 +287,7 @@ function nativeResetHarness(shape: "file" | "directory" | "absent", fault?: "del
   const deleted: string[] = [], order: string[] = [];
   class File {
     name: string;
-    size = 7;
+    size = 16;
     constructor(name = "qrupgrade-library-v1") { this.name = name; }
     delete() {
       if (fault === "delete") throw new Error("Deletion denied");
@@ -298,6 +298,7 @@ function nativeResetHarness(shape: "file" | "directory" | "absent", fault?: "del
   class Directory extends File {
     // Reproduce Expo's distinction: Directory.exists is false for a file.
     get exists() { return present && shape === "directory"; }
+    list() { return [new File("unrecognized-entry")]; }
   }
   const target = shape === "directory" ? new Directory() : new File();
   const other = new File("qrupgrade-library-v1-unrelated");
@@ -318,7 +319,7 @@ function nativeResetHarness(shape: "file" | "directory" | "absent", fault?: "del
     return modules[name];
   } });
   assert(exports.nativeLibraryAdapters);
-  return { adapters: exports.nativeLibraryAdapters, library: createLocalLibrary(exports.nativeLibraryAdapters), deleted, order, hasRoot: () => present, getKey: () => key };
+  return { adapters: exports.nativeLibraryAdapters, library: createLocalLibrary(exports.nativeLibraryAdapters), deleted, order, hasRoot: () => present, getKey: () => key, setKey: (value: string | null) => { key = value; } };
 }
 for (const shape of ["file", "directory", "absent"] as const) test(`native reset handles ${shape} at the fixed owned root`, async () => {
   const h = nativeResetHarness(shape);
@@ -334,4 +335,136 @@ for (const fault of ["delete", "access", "verify-access", "no-op-delete"] as con
   assert.equal(h.getKey(), "a".repeat(64)); assert(!h.order.includes("delete-key"));
   assert.equal(h.hasRoot(), fault !== "verify-access");
   assert(!h.deleted.includes("qrupgrade-library-v1-unrelated"));
+});
+
+// Execute the production component with hook/SDK-shaped doubles. This verifies
+// the core-to-screen recovery composition, not an installed React Native runtime.
+type ScreenNode = { type: string; props: { children?: unknown; title?: string; onPress?: () => void } };
+type AlertButton = { text: string; style?: string; onPress?: () => void };
+const libraryScreenCode = ts.transpileModule(
+  readFileSync(new URL("../mobile/app/library.tsx", import.meta.url), "utf8"),
+  { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.ReactJSX } },
+).outputText;
+function libraryScreen(library: Library) {
+  const state: unknown[] = [], refs: { current: unknown }[] = [];
+  const alerts: { message: string; buttons: AlertButton[] }[] = [];
+  let cursor = 0, refCursor = 0, focused = false, focus: (() => void) | undefined;
+  const jsx = (type: string, props: ScreenNode["props"]) => ({ type, props });
+  const modules: Record<string, unknown> = {
+    react: {
+      useState(initial: unknown) {
+        const slot = cursor++;
+        if (!(slot in state)) state[slot] = initial;
+        return [state[slot], (value: unknown) => { state[slot] = value; }];
+      },
+      useRef(initial: unknown) { return refs[refCursor++] ||= { current: initial }; },
+      useCallback: (callback: unknown) => callback,
+    },
+    "react/jsx-runtime": { jsx, jsxs: jsx },
+    "react-native": {
+      Text: "Text", View: "View", Pressable: "Pressable", Platform: { OS: "android" },
+      Alert: { alert: (_title: string, message: string, buttons: AlertButton[]) => alerts.push({ message, buttons }) },
+    },
+    "expo-router": { useRouter: () => ({}), useFocusEffect: (callback: () => void) => { focus = callback; } },
+    "../src/local-library-model": libraryModel,
+    "../src/draft": { useDraft: () => ({ localLibrarySupported: true, listSaved: () => library.list(), resetSavedLibrary: () => library.reset() }) },
+    "../src/library-title-dialog": { LibraryTitleDialog: "LibraryTitleDialog" },
+    "../src/library-screen-lifecycle": {},
+    "../src/ui": { Button: "Button", Card: "Card", Copy: "Copy", Heading: "Heading", Page: "Page", useTheme: () => ({}) },
+  };
+  const exports: { default?: () => ScreenNode } = {};
+  runInNewContext(libraryScreenCode, { exports, require: (name: string) => {
+    assert(Object.hasOwn(modules, name), `Unexpected screen dependency: ${name}`);
+    return modules[name];
+  } });
+  function render() {
+    cursor = 0; refCursor = 0;
+    const tree = exports.default!(), nodes: ScreenNode[] = [], text: string[] = [];
+    function walk(value: unknown) {
+      if (typeof value === "string") text.push(value);
+      else if (Array.isArray(value)) value.forEach(walk);
+      else if (value && typeof value === "object" && "props" in value) {
+        const node = value as ScreenNode; nodes.push(node); walk(node.props.children);
+      }
+    }
+    walk(tree);
+    if (!focused) { focused = true; focus?.(); }
+    return { text: text.join(" "), buttons: nodes.filter(node => node.type === "Button") };
+  }
+  return { render, alerts, settle: () => new Promise<void>(resolve => setImmediate(resolve)) };
+}
+
+for (const shape of ["file", "directory"] as const) test(`production library screen exposes confirmed recovery for unknown ${shape} inventory with an intact key`, async () => {
+  const h = nativeResetHarness(shape), originalKey = h.getKey();
+  const listing = await h.library.list();
+  assert.equal(listing.recovery, "unrecognized-files");
+  assert.equal(listing.rows.length, 0); assert.equal(listing.totalBytes, 16);
+  await assert.rejects(h.library.save({ title: "Blocked", draft: draft() }), errorCode("unsupported-version"));
+  const screen = libraryScreen(h.library);
+  screen.render(); await screen.settle();
+  const rendered = screen.render();
+  assert(!rendered.text.includes("No saved designs yet"));
+  const reset = rendered.buttons.find(node => node.props.title === "Delete inaccessible local saves");
+  assert(reset); reset.props.onPress!();
+  const confirmation = screen.alerts.at(-1)!;
+  assert.match(confirmation.message, /unrecognized or inaccessible files/);
+  assert.match(confirmation.message, /including readable designs/);
+  assert(!confirmation.message.includes("key is"));
+  confirmation.buttons.find(button => button.style === "cancel")?.onPress?.();
+  await screen.settle();
+  assert(h.hasRoot()); assert.equal(h.getKey(), originalKey); assert.deepEqual(h.deleted, []);
+  reset.props.onPress!();
+  screen.alerts.at(-1)!.buttons.find(button => button.style === "destructive")!.onPress!();
+  await screen.settle();
+  assert(!h.hasRoot()); assert.equal(h.getKey(), null);
+  assert.deepEqual(h.deleted, ["qrupgrade-library-v1"]);
+  assert.equal((await h.library.list()).recovery, undefined);
+  assert(screen.render().text.includes("No saved designs yet"));
+});
+
+test("unrecognized inventory preserves bytes until explicit reset and then permits save/reopen", async () => {
+  const h = harness(); h.setKey("a".repeat(64));
+  h.files.set("unrecognized", new Uint8Array(16));
+  const before = clone([...h.files]);
+  assert.equal((await h.library.list()).recovery, "unrecognized-files");
+  await assert.rejects(h.library.save({ title: "Blocked", draft: draft() }), errorCode("unsupported-version"));
+  assert.deepEqual([...h.files], before); assert.equal(h.getKey(), "a".repeat(64));
+  await h.library.reset();
+  const saved = await h.library.save({ title: "Recovered", draft: draft() });
+  assert.equal((await h.library.open(saved.id)).title, "Recovered");
+  assert.equal((await h.library.list()).recovery, undefined);
+});
+
+test("production screen retains missing-key confirmation and reset cleanup retry", async () => {
+  const h = nativeResetHarness("file"); h.setKey(null);
+  const screen = libraryScreen(h.library);
+  screen.render(); await screen.settle();
+  const rendered = screen.render();
+  assert(!rendered.text.includes("No saved designs yet"));
+  rendered.buttons.find(node => node.props.title === "Delete inaccessible local saves")!.props.onPress!();
+  assert.match(screen.alerts.at(-1)!.message, /key is missing or invalid/);
+  assert(h.hasRoot()); assert.deepEqual(h.deleted, []);
+  const removeKey = h.adapters.keys.remove;
+  h.adapters.keys.remove = async () => { throw new Error("temporarily unavailable"); };
+  screen.alerts.at(-1)!.buttons.find(button => button.style === "destructive")!.onPress!();
+  await screen.settle();
+  assert(!h.hasRoot());
+  const retry = screen.render().buttons.find(node => node.props.title === "Retry local save cleanup");
+  assert(retry); h.adapters.keys.remove = removeKey;
+  retry.props.onPress!();
+  screen.alerts.at(-1)!.buttons.find(button => button.style === "destructive")!.onPress!();
+  await screen.settle();
+  assert(screen.render().text.includes("No saved designs yet"));
+});
+
+test("newer-schema rows do not expose whole-library reset", async () => {
+  const h = harness(); h.setKey("a".repeat(64));
+  const id = randomUUID();
+  h.files.set(`${id}/1.qru`, utf8(`QRUL1|2|${id}|1\n${"a".repeat(100)}`));
+  const before = clone([...h.files]), screen = libraryScreen(h.library);
+  screen.render(); await screen.settle();
+  const rendered = screen.render();
+  assert(rendered.text.includes("Newer app required"));
+  assert(!rendered.buttons.some(node => node.props.title === "Delete inaccessible local saves"));
+  assert.deepEqual([...h.files], before);
 });

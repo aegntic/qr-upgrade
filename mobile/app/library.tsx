@@ -63,6 +63,7 @@ export default function LibraryScreen() {
   >();
   const [renameError, setRenameError] = useState("");
   const [resetPending, setResetPending] = useState(false);
+  const inventoryRecovery = listing?.recovery === "unrecognized-files";
 
   const refresh = useCallback(async () => {
     if (!mounted.current) return;
@@ -204,7 +205,11 @@ export default function LibraryScreen() {
   function confirmReset() {
     Alert.alert(
       "Delete inaccessible local saves?",
-      "The encryption key is unavailable. This removes every local save and cannot recover their contents.",
+      error?.code === "key-missing"
+        ? "The encryption key is missing or invalid. This removes every local save and cannot recover their contents."
+        : inventoryRecovery
+          ? "The library contains unrecognized or inaccessible files. This removes every local save, including readable designs, and all unrecognized files in the local library. This cannot be undone."
+          : "This removes every local save and finishes private storage key cleanup. This cannot be undone.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -263,10 +268,12 @@ export default function LibraryScreen() {
         list.
       </Copy>
 
-      {error || resetPending ? (
+      {error || resetPending || inventoryRecovery ? (
         <Card>
           <Text accessibilityRole="alert" style={{ color: t.error }}>
-            {error?.message || "The old private storage key still needs cleanup."}
+            {error?.message || (resetPending
+              ? "Local saves or the old private storage key still need cleanup."
+              : "Unrecognized files prevent new saves. You can delete all local saves to start again.")}
           </Text>
           {!resetPending ? (
             <Button
@@ -276,7 +283,7 @@ export default function LibraryScreen() {
               onPress={() => void refresh()}
             />
           ) : null}
-          {error?.code === "key-missing" || resetPending ? (
+          {error?.code === "key-missing" || resetPending || inventoryRecovery ? (
             <Button
               title={
                 resetPending
@@ -297,7 +304,7 @@ export default function LibraryScreen() {
         </Text>
       ))}
 
-      {listing && listing.rows.length === 0 && !error ? (
+      {listing && listing.rows.length === 0 && !error && !resetPending && !inventoryRecovery ? (
         <Card>
           <Text
             accessibilityRole="header"

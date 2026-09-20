@@ -19,7 +19,7 @@ These timings measure this small fixture's local restore and assertions, not an 
 ## Before a production restoration
 
 1. Identify the incident, accountable owner and intended recovery point. Preserve a new private export and deployment identifiers before changes.
-2. Confirm whether the problem requires code rollback, data repair or full restoration. Do not restore an old database merely to undo a code deployment.
+2. Confirm whether the problem requires code rollback, data repair or full restoration. Do not restore an old database merely to undo a code deployment. For a web/service release, follow the [Cloudflare cutover and rollback checklist](cloudflare-web-hosting.md#required-cutover-and-rollback-checklist): retain a compatible Cloudflare version pair, preserve current lifecycle/session fences and independent receipts, and keep writes fenced until the restore criteria pass. The historical Vercel baseline is not a private-account rollback target and Hobby hosting is not an approved paid-traffic fallback.
 3. Restore SQL into an isolated database first. Apply only migrations compatible with the recovery deployment. Verify integrity, schema and ownership constraints, plus unpublished/published state.
 4. Recover R2 objects referenced by cloud-design metadata and hosted-asset rows. A SQL backup alone does not contain those objects. Keep the bucket private. Match object existence, size/type and ownership against the restored manifest.
 5. Rehearse owner isolation, public snapshot/asset membership, paused/archive unavailability, redirect behavior and billing customer binding in the isolated environment. Do not replay financial mutations; reconcile subscriptions against Stripe's current state.
