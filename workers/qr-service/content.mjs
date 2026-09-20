@@ -42,7 +42,7 @@ export async function contentRequest(r,env){
   let row;const now=new Date().toISOString();
   if(r.method==='PUT'){try{await validateAssets(env,owner,input);}catch(e){if(e.message.startsWith('Choose'))return fail(e.message,400);throw e;}row=await env.DB.prepare('UPDATE content_pages SET draft=?,updated_at=? WHERE id=? AND owner=? RETURNING *').bind(JSON.stringify(input),now,id,owner).first();}
   else if(input.action==='publish'){
-   try{const draft=validateDraft(JSON.parse(current.draft),true);await validateAssets(env,owner,draft);}catch(e){return fail(e.message.startsWith('Choose')||e.message.startsWith('Each')||e.message.startsWith('Upload')||e.message.startsWith('Add')?e.message:'Check the page before publishing.',400);}
+   let draft;try{draft=validateDraft(JSON.parse(current.draft),true);}catch(e){return fail(e.message.startsWith('Choose')||e.message.startsWith('Each')||e.message.startsWith('Upload')||e.message.startsWith('Add')?e.message:'Check the page before publishing.',400);}try{await validateAssets(env,owner,draft);}catch(e){if(e.message.startsWith('Choose'))return fail(e.message,400);throw e;}
    row=await env.DB.prepare("UPDATE content_pages SET published=draft,status='published',updated_at=? WHERE id=? AND owner=? AND draft=? AND archived=0 RETURNING *").bind(now,id,owner,current.draft).first();if(!row)return fail('The page changed or is archived. Reopen it before publishing.',409);
   }else{const field=input.action==='pause'?"status='paused'":`archived=${input.action==='archive'?1:0}`;row=await env.DB.prepare(`UPDATE content_pages SET ${field},updated_at=? WHERE id=? AND owner=? RETURNING *`).bind(now,id,owner).first();}
   return row?reply({page:page(row)}):fail('Page not found.',404);
