@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
-import { campaignLayouts, campaignSvg, campaignFilename, campaignCopy, defaultCampaignCopy } from '../src/lib/campaign-kit';
+import { campaignLayouts, campaignSvg, campaignProofSvg, campaignFilename, campaignCopy, defaultCampaignCopy } from '../src/lib/campaign-kit';
 import { qrSvg, createMatrix } from '../shared/qr';
 import { decodePixels } from '../shared/decode';
 import { templates } from '../src/lib/generator-options';
@@ -44,6 +44,8 @@ test('campaign copy cannot inject SVG markup or external image URLs', () => {
   assert.throws(() => campaignSvg(campaignLayouts[0], 'https://example.com/track.png', defaultCampaignCopy));
   assert.throws(() => campaignSvg(campaignLayouts[0], 'data:image/svg+xml;base64,AAAA', defaultCampaignCopy));
   assert.throws(() => campaignSvg(campaignLayouts[0], 'data:image/png;base64,AAAA" onload="alert(1)', defaultCampaignCopy));
+  assert.throws(() => campaignProofSvg([]));
+  assert.throws(() => campaignProofSvg(['https://example.com/a.png', 'data:image/png;base64,AAAA', 'data:image/png;base64,AAAA']));
 });
 
 test('text and filenames stay bounded and safe, including unicode', () => {
