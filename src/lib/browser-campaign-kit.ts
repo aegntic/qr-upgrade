@@ -1,6 +1,6 @@
 import { rasterize, readCanvas } from './browser-qr';
 import { svgData } from './qr';
-import { campaignLayouts, campaignSvg, campaignGuide, type CampaignCopy } from './campaign-kit';
+import { campaignLayouts, campaignSvg, campaignProofSvg, campaignGuide, type CampaignCopy } from './campaign-kit';
 import type { DesignArtifact } from './editor-draft';
 
 async function canvasFromImage(source: string, width: number, height: number) {
@@ -44,7 +44,7 @@ export async function buildCampaignKit(artifact: DesignArtifact, copy: CampaignC
   const original = await rasterize(artifact.svg, 1024);
   await record(original, 'qr-artwork.png');
   const png = original.toDataURL('image/png');
-  const layouts: { png: string; width: number; height: number; name: string }[] = [];
+  const layouts: string[] = [];
   for (const layout of campaignLayouts) {
     signal.throwIfAborted();
     progress(`Checking ${layout.name.toLowerCase()}…`);
@@ -54,27 +54,19 @@ export async function buildCampaignKit(artifact: DesignArtifact, copy: CampaignC
     const canvas = await canvasFromImage(svgData(campaignSvg(layout, png, copy)), layout.width, layout.height);
     const filename = layout.id === 'square' ? 'social-post.png' : layout.id === 'story' ? 'vertical-story.png' : 'counter-card.png';
     await record(canvas, filename);
-    layouts.push({ png: canvas.toDataURL('image/png'), width: layout.width, height: layout.height, name: layout.name });
+    layouts.push(canvas.toDataURL('image/png'));
   }
   signal.throwIfAborted();
   progress('Packing your campaign kit…');
   const { jsPDF } = await import('jspdf');
   const doc = new jsPDF({ unit: 'mm', format: [105, 148], orientation: 'portrait', compress: true });
-  doc.addImage(layouts[2].png, 'PNG', 0, 0, 105, 148);
+  doc.addImage(layouts[2], 'PNG', 0, 0, 105, 148);
   files['counter-card.pdf'] = new Uint8Array(doc.output('arraybuffer'));
   const proof = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape', compress: true });
-  proof.setFontSize(21); proof.text('Campaign proof', 16, 20);
-  proof.setFontSize(10); proof.text('Artwork, message and placement review', 16, 29);
-  layouts.forEach((layout, index) => {
-    const width = Math.min(80, 112 * layout.width / layout.height), height = width * layout.height / layout.width;
-    const center = 56 + index * 92;
-    proof.setFontSize(11); proof.text(layout.name, center, 42, { align: 'center' });
-    proof.addImage(layout.png, 'PNG', center - width / 2, 49, width, height);
-  });
-  proof.setFontSize(10);
-  proof.text('All four exported PNGs matched the intended QR content at full size and 50% size.', 16, 178);
-  proof.text('Review the artwork and copy. Test the final print or published post before distributing.', 16, 185);
-  proof.text('Reference checks only. This contact sheet is for review, not printing at final size.', 16, 192);
+  // Flatten the review sheet so PDF viewers cannot substitute fonts and alter spacing.
+  const proofImage = await canvasFromImage(svgData(campaignProofSvg(layouts)), 1684, 1190);
+  signal.throwIfAborted();
+  proof.addImage(proofImage.toDataURL('image/png'), 'PNG', 0, 0, 297, 210);
   files['campaign-proof.pdf'] = new Uint8Array(proof.output('arraybuffer'));
   const { zipSync, strToU8 } = await import('fflate');
   files['scan-report.json'] = strToU8(JSON.stringify({ version: 1, createdAt: new Date().toISOString(), decoder: 'jsQR', payloadSha256: await sha256(new TextEncoder().encode(artifact.text)), checks, pdf: { file: 'counter-card.pdf', widthMm: 105, heightMm: 148, embeds: 'counter-card.png', separatelyDecoded: false }, proof: { file: 'campaign-proof.pdf', purpose: 'Visual review only; not final print size', separatelyDecoded: false }, limitation: 'Reference image checks only. Test physical prints and published social images. Destination availability was not checked.' }, null, 2));

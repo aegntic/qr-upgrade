@@ -17,6 +17,10 @@ export type CampaignLayout = typeof campaignLayouts[number];
 
 const xml = (text: string) => text.replace(/[&<>"']/g, value => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[value]!);
 const clean = (text: string, length: number) => Array.from(text.replace(/[\u0000-\u001f\u007f]/g, ' ').trim()).slice(0, length).join('');
+function checkedPng(png: string) {
+  if (!/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(png) || png.length > 16 * 1024 * 1024) throw new Error('A complete PNG artwork is needed for your kit.');
+  return png;
+}
 export function campaignCopy(value: CampaignCopy): CampaignCopy {
   return { brand: clean(value.brand, 32), headline: clean(value.headline, 40), detail: clean(value.detail, 64), theme: value.theme === 'paper' ? 'paper' : 'obsidian' };
 }
@@ -26,7 +30,7 @@ export function campaignFilename(name: string) {
 
 // PNG data only: destinations and user copy can never become active SVG content.
 export function campaignSvg(layout: CampaignLayout, png: string, value: CampaignCopy): string {
-  if (!/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(png) || png.length > 16 * 1024 * 1024) throw new Error('A complete PNG artwork is needed for your kit.');
+  checkedPng(png);
   const copy = campaignCopy(value), paper = layout.id === 'counter' || copy.theme === 'paper';
   const bg = paper ? '#f7f6f2' : '#0b0d12', ink = paper ? '#171b24' : '#eff1f7', muted = paper ? '#545b69' : '#aab4c8';
   const { x, y, size } = layout.qr, center = layout.width / 2;
@@ -45,6 +49,16 @@ export function campaignSvg(layout: CampaignLayout, png: string, value: Campaign
     ${text(copy.headline, layout.headlineY, layout.id === 'counter' ? 64 : 54, ink, 700)}
     ${text(copy.detail, layout.detailY, 26, muted)}
   </svg>`;
+}
+
+export function campaignProofSvg(images: string[]): string {
+  if (images.length !== campaignLayouts.length) throw new Error('All three campaign layouts are needed for the proof sheet.');
+  const panels = campaignLayouts.map((layout, index) => {
+    const width = Math.min(450, 630 * layout.width / layout.height), height = width * layout.height / layout.width;
+    const center = 317 + index * 521;
+    return `<text x="${center}" y="237" text-anchor="middle" font-size="25">${layout.name}</text><image x="${center - width / 2}" y="278" width="${width}" height="${height}" xlink:href="${checkedPng(images[index])}"/>`;
+  }).join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1684" height="1190" viewBox="0 0 1684 1190"><rect width="100%" height="100%" fill="#fff"/><g font-family="Arial, sans-serif" fill="#171b24"><text x="90" y="114" font-size="48" font-weight="700">Campaign proof</text><text x="90" y="164" font-size="24">Artwork, message and placement review</text>${panels}<g font-size="22" fill="#545b69"><text x="90" y="1010">All four exported PNGs matched the intended QR content at full size and 50% size.</text><text x="90" y="1050">Review the artwork and copy. Test the final print or published post before distributing.</text><text x="90" y="1090">Reference checks only. This sheet is for review, not printing at final size.</text></g></g></svg>`;
 }
 
 export const campaignGuide = `YOUR QR UPGRADE CAMPAIGN KIT
