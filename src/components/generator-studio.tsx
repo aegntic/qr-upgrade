@@ -338,6 +338,11 @@ export default function GeneratorStudio({
     workflow.setDesign(draft, artifact, savedId);
     router.push('/scan-lab');
   }
+  function openCampaignKit() {
+    if (!ready || !artifact || uploadsBusy) return;
+    workflow.setDesign(draft, artifact, savedId);
+    router.push('/campaign-kit');
+  }
 
   function chooseType(id: DestinationId) {
     if (id === kind) return;
@@ -1184,6 +1189,8 @@ export default function GeneratorStudio({
                     : `${format.toUpperCase()} image · scan-checked after encoding.`}
             </p>
             <div className="workflow-save-panel">
+              <button className="workflow-wide" disabled={!ready || uploadsBusy || exporting} onClick={openCampaignKit}>Create campaign kit <ArrowRight size={16}/></button>
+              <p className="generator-note">Your artwork as a social post, story and A6 print card. Includes scan checks and a print guide.</p>
               <label className="generator-field"><span>Design name &amp; file name</span><input value={name} maxLength={80} onChange={e=>setName(e.target.value)}/></label>
               <button className="workflow-wide" disabled={!artifact || uploadsBusy} onClick={testDesign}>Test this design <ArrowRight size={16}/></button>
               <button className="workflow-wide" disabled={!artifact || saving || uploadsBusy} onClick={()=>void save()}>{saving ? 'Saving…' : savedId ? 'Save new version' : 'Save design'}</button>

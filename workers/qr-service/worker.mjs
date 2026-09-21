@@ -2,15 +2,15 @@ import { cloudRequest } from "./cloud.mjs";
 import { linksRequest, resolveLink } from "./links.mjs";
 import { contentRequest, assetRequest, publicContent } from "./content.mjs";
 import { billingRequest } from "./billing.mjs";
+import { ART_STYLES, artworkPrompt } from '../../shared/art-styles.mjs';
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const hash = /^[a-f0-9]{64}$/;
-const styles = { steel: 'sculpted obsidian and polished brushed steel, white studio backlighting', glass: 'luminous coloured glass, translucent sculptural forms, bright reflections', botanical: 'intricate botanical leaves, delicate flowers, cream paper, forest tones', illustrated: 'bold editorial illustration, strong geometric shapes, crisp composition' };
 const reply = (body,status=200) => Response.json(body,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 export function validateArtInput(body) {
  if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(k=>!['id','owner','network','prompt','style'].includes(k)))throw new Error('Invalid request.');
  if(!uuid.test(body.id)||!hash.test(body.owner)||!hash.test(body.network))throw new Error('Invalid request.');
  if(typeof body.prompt!=='string'||body.prompt.trim().length<8||body.prompt.length>800||/[\x00-\x08\x0b-\x1f\x7f]/.test(body.prompt))throw new Error('Describe your artwork in 8–800 characters.');
- if(!Object.hasOwn(styles,body.style))throw new Error('Choose an artwork style.');
+ if(!Object.hasOwn(ART_STYLES,body.style))throw new Error('Choose an artwork style.');
  return {...body,prompt:body.prompt.trim()};
 }
 async function authorised(request,secret) {
@@ -25,7 +25,7 @@ async function generate(env,job) {
  let timer;
  try {
   const result=await Promise.race([
-   env.AI.run(env.AI_MODEL,{prompt:`Square artwork designed to become an artistic QR image. ${styles[job.style]}. ${job.prompt}. Balanced high contrast dark and light detail across the whole square, integrated angular blocks and flowing forms, three subtle square focal structures near top left, top right and bottom left. No typography, no letters, no watermark.`,steps:4}),
+   env.AI.run(env.AI_MODEL,{prompt:artworkPrompt(job.style,job.prompt),steps:4}),
    new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('timeout')),24000);})
   ]);
   if(typeof result?.image!=='string'||result.image.length>1800000||!/^[A-Za-z0-9+/]+={0,2}$/.test(result.image))throw new Error('image');

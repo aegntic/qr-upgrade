@@ -14,6 +14,9 @@ const pieces = [
     image: "/brand-studies/x-hero.webp",
     href: "/generator?brand=x",
   },
+  { id: 'glass-linkedin', name: 'Cobalt glass', material: 'Glass / architectural relief', image: '/brand-studies/linkedin.webp', href: '/generator?brand=linkedin' },
+  { id: 'silk-instagram', name: 'Iridescent folds', material: 'Glass / folded silk', image: '/brand-studies/instagram.webp', href: '/generator?brand=instagram' },
+  { id: 'ceramic-whatsapp', name: 'Glazed ceramic', material: 'Ceramic / porcelain', image: '/brand-studies/whatsapp.webp', href: '/generator?brand=whatsapp' },
   ...artworkDesigns
     .filter((d) => d.id !== "dragon")
     .map((d) => ({
@@ -80,9 +83,9 @@ export default function ArtworkExhibition() {
           </span>
         </h1>
         <p>
-          Turn your link into a piece of your world.
+          Sculptural QR art with a 3D look.
           <br />
-          Custom QR images. Designed to be seen.
+          Made to stand out. Checked before you share.
         </p>
         <div className="hero-actions">
           <a className="steel-button" href="#studio">

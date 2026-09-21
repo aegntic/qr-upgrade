@@ -54,6 +54,7 @@ export function Footer() {
         <Link href="/generator?mode=image">Image QR</Link>
         <Link href="/generator?mode=art">QR Art</Link>
         <Link href="/scan-lab">Scan Lab</Link>
+        <Link href="/campaign-kit">Campaign kit</Link>
         <Link href="/#qr-types">QR types</Link>
       </nav>
       <nav aria-label="Explore">
