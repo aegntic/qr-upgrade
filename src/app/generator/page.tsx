@@ -34,8 +34,8 @@ export default async function Generator({
   return (
     <main id="main" className="foundation-page generator-page">
       <div className="generator-hero">
-        <h1>Your link. Your signature.</h1>
-        <p>One destination. An entirely different impression.</p>
+        <h1>Give your link a new dimension.</h1>
+        <p>Sculptural QR artwork. Your destination. A campaign ready to share.</p>
       </div>
       <GeneratorStudio
         resume={resume === "1" || (!fresh && !art && !brand && !mode && !type && !portrait)}

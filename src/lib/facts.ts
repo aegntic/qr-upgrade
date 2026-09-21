@@ -1,7 +1,15 @@
 export const site = "https://qrupgrade.com";
 export const description =
-  "Create custom QR images where artwork carries your destination. Check the finished image, repair scanability, and export the artwork.";
+  "Create sculptural QR artwork with a 3D look. Check the finished image and turn it into social and print campaign assets.";
 export const faqs = [
+  {
+    q: "Are these actual 3D models?",
+    a: "No. QR Upgrade creates flat QR images with the appearance of sculpted depth, light and materials. Steel, glass, ceramic and embossed-paper AI directions are available when generation is connected. The browser adds and tests the QR pattern after generation; a generated artwork alone is not assumed scannable.",
+  },
+  {
+    q: "What is in a campaign kit?",
+    a: "The web studio can package the original artwork PNG, a 1080-square post, a 1080 by 1920 story, an A6 counter-card PNG and RGB PDF, a scan report and a print guide in one ZIP. Business, creator and agency message presets are editable. Four PNGs are decoded at full and half size against the intended content before downloading. The PDF embeds the checked counter-card image; it is not separately decoded. Native campaign-kit export is not yet available.",
+  },
   {
     q: "What are the three creation modes?",
     a: "The web generator offers Custom QR with editable colours, module shapes and 15 templates; Image QR using your own picture; and QR Art with original prompt-based generation plus 14 library artworks. It includes centre portraits, image crop and composition controls, captions, 24 destination shortcuts, local design saving, and PNG, JPG, WebP, SVG and RGB PDF downloads.",

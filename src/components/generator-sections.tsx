@@ -30,8 +30,8 @@ const benefits = [
   },
   {
     icon: Sparkles,
-    title: "An artwork library",
-    text: "Explore 14 image directions, from botanical illustrations to sculptural metal.",
+    title: "A new dimension",
+    text: "Explore sculpted steel, optical glass and glazed forms. Depth and texture in a flat QR image.",
   },
   {
     icon: Link2,
@@ -55,8 +55,8 @@ const benefits = [
   },
   {
     icon: Download,
-    title: "Take the whole design",
-    text: "Download PNG, JPG, WebP, SVG or RGB PDF with your chosen name and print width.",
+    title: "Take the whole campaign",
+    text: "Create a square post, vertical story and A6 counter card from your artwork. Download them together with scan results and a print guide.",
   },
   {
     icon: ImagePlus,
@@ -89,6 +89,14 @@ const questions = [
   {
     title: "Creating and customising",
     items: [
+      [
+        "What do you mean by a 3D QR code?",
+        "A flat QR image with sculptural depth, shading and material texture. It opens with an ordinary QR scanner; no 3D viewer, AR app or physical model is required. The finished artwork still has to pass our scan checks.",
+      ],
+      [
+        "What comes in a campaign kit?",
+        "Your original QR artwork, a square social post, a vertical story and an A6 counter card in PNG and RGB PDF, plus a scan report and printing guide. Edit your brand and call to action once. All four PNGs are checked at full and half size before the ZIP download; test the final printed or published result too.",
+      ],
       [
         "What is the difference between the three modes?",
         "Custom QR gives you a clean pattern with editable colours and shapes. Image QR uses your uploaded picture. QR Art generates original artwork from your prompt or starts with a library image. All three are checked before export.",

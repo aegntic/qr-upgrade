@@ -19,6 +19,7 @@
     "security:cloudflare": "node scripts/security/cloudflare-check.mjs"
   },
   "dependencies": {
+    "fflate": "0.8.3",
     "jose": "6.2.12",
     "jspdf": "4.2.1",
     "jsqr": "1.4.0",

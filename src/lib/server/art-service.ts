@@ -1,6 +1,7 @@
 import { serviceFetch, serviceAvailable } from '../../../cloudflare/service';
 import { trustedRequestIp } from '../../../cloudflare/runtime';
 import { createHmac, randomBytes } from 'node:crypto';
+import { ART_STYLES } from '../../../shared/art-styles.mjs';
 const COOKIE = 'qr-art-session';
 const requestIdPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const headers = { 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff' };
@@ -41,7 +42,7 @@ export function createArtHandler(config: ArtConfig) {
   let target='/art', body:string|undefined;
   if(request.method==='POST'){
    if(!sameOrigin(request,config))return respond({error:'Open the QR Upgrade studio to generate artwork.'},403);
-   try{const input=await boundedJson(request);if(Object.keys(input).some(k=>!['requestId','prompt','style'].includes(k))||!requestIdPattern.test(String(input.requestId||''))||typeof input.prompt!=='string'||input.prompt.length>800||input.prompt.trim().length<8||!['steel','glass','botanical','illustrated'].includes(String(input.style)))throw new Error('Provide a description of 8–800 characters and choose a style.');
+   try{const input=await boundedJson(request);if(Object.keys(input).some(k=>!['requestId','prompt','style'].includes(k))||!requestIdPattern.test(String(input.requestId||''))||typeof input.prompt!=='string'||input.prompt.length>800||input.prompt.trim().length<8||typeof input.style!=='string'||!Object.hasOwn(ART_STYLES,input.style))throw new Error('Provide a description of 8–800 characters and choose a style.');
     // Only the trusted web entry supplies production network metadata.
     const network=trustedRequestIp(request,!config.production);
     if(!network)return respond({error:'Artwork service could not verify this request. Try again.'},503);
