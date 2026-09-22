@@ -1,16 +1,20 @@
+import {accountDeletionRequest,cleanupAccounts} from './account-deletion.mjs';
+import {privateSession,ownerClosed} from './lifecycle.mjs';
+import { accountExportRequest } from "./account-export.mjs";
+import { accountRequest, securityCleanupStatements } from "./account.mjs";
 import { cloudRequest } from "./cloud.mjs";
 import { linksRequest, resolveLink } from "./links.mjs";
 import { contentRequest, assetRequest, publicContent } from "./content.mjs";
 import { billingRequest } from "./billing.mjs";
+import { ART_STYLES, artworkPrompt } from '../../shared/art-styles.mjs';
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const hash = /^[a-f0-9]{64}$/;
-const styles = { steel: 'sculpted obsidian and polished brushed steel, white studio backlighting', glass: 'luminous coloured glass, translucent sculptural forms, bright reflections', botanical: 'intricate botanical leaves, delicate flowers, cream paper, forest tones', illustrated: 'bold editorial illustration, strong geometric shapes, crisp composition' };
 const reply = (body,status=200) => Response.json(body,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 export function validateArtInput(body) {
  if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(k=>!['id','owner','network','prompt','style'].includes(k)))throw new Error('Invalid request.');
  if(!uuid.test(body.id)||!hash.test(body.owner)||!hash.test(body.network))throw new Error('Invalid request.');
  if(typeof body.prompt!=='string'||body.prompt.trim().length<8||body.prompt.length>800||/[\x00-\x08\x0b-\x1f\x7f]/.test(body.prompt))throw new Error('Describe your artwork in 8–800 characters.');
- if(!Object.hasOwn(styles,body.style))throw new Error('Choose an artwork style.');
+ if(!Object.hasOwn(ART_STYLES,body.style))throw new Error('Choose an artwork style.');
  return {...body,prompt:body.prompt.trim()};
 }
 async function authorised(request,secret) {
@@ -25,7 +29,7 @@ async function generate(env,job) {
  let timer;
  try {
   const result=await Promise.race([
-   env.AI.run(env.AI_MODEL,{prompt:`Square artwork designed to become an artistic QR image. ${styles[job.style]}. ${job.prompt}. Balanced high contrast dark and light detail across the whole square, integrated angular blocks and flowing forms, three subtle square focal structures near top left, top right and bottom left. No typography, no letters, no watermark.`,steps:4}),
+   env.AI.run(env.AI_MODEL,{prompt:artworkPrompt(job.style,job.prompt),steps:4}),
    new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('timeout')),24000);})
   ]);
   if(typeof result?.image!=='string'||result.image.length>1800000||!/^[A-Za-z0-9+/]+={0,2}$/.test(result.image))throw new Error('image');
@@ -39,8 +43,23 @@ export default {
  async fetch(request,env,ctx) {
   if(!await authorised(request,env.SERVICE_SECRET))return reply({error:'Unauthorized.'},401);
   const url=new URL(request.url);
-  if(url.pathname==='/health'&&request.method==='GET')return reply({ready:!!env.DB&&!!env.AI,model:env.AI_MODEL});
+  if(url.pathname==='/health'&&request.method==='GET'){
+   try {
+    if(typeof env.DB?.prepare!=='function'||typeof env.AI?.run!=='function'||typeof env.ASSETS?.get!=='function'||typeof env.ASSETS?.put!=='function'||typeof env.AI_MODEL!=='string'||!env.AI_MODEL)return reply({ready:false},503);
+    const row=await env.DB.prepare('SELECT 1 AS ready').first();
+    return row?.ready===1?reply({ready:true}):reply({ready:false},503);
+   }catch{return reply({ready:false},503);}
+  }
   try {
+   if(url.pathname.startsWith('/account/deletion/'))return await accountDeletionRequest(request,env);
+   const privatePath=/^\/(cloud|links|content|content-assets)(?:\/|$)/.test(url.pathname);
+   if(privatePath&&!await privateSession(request,env))return reply({error:'Sign in again to access this account.'},401);
+   if(url.pathname.startsWith('/billing')&&url.pathname!=='/billing/events'&&request.headers.has('x-qr-user')){
+    if(await ownerClosed(env,request.headers.get('x-qr-user')))return reply({error:'This account is closed.'},409);
+    if(request.method!=='GET'&&!await privateSession(request,env))return reply({error:'Sign in again to manage billing.'},401);
+   }
+   if(url.pathname==='/account/export'||url.pathname.startsWith('/account/export/'))return await accountExportRequest(request,env);
+   if(url.pathname.startsWith('/account/'))return await accountRequest(request,env);
    if(url.pathname==='/links'||url.pathname.startsWith('/links/'))return await linksRequest(request,env);
    if(url.pathname.startsWith('/resolve/'))return await resolveLink(request,env);
    if(url.pathname==='/content'||url.pathname.startsWith('/content/'))return await contentRequest(request,env);
@@ -75,10 +94,11 @@ export default {
    if(!reservation)return reply({error:'Today’s artwork allowance has been reached. You can still use the library or your own image. Please try again tomorrow.'},429);
    ctx.waitUntil(generate(env,job));
    return reply({id:job.id,status:'pending'},202);
-  }catch{return reply({error:'Artwork service is temporarily unavailable. Please try again.'},503);}
+  }catch{return reply({error:url.pathname.startsWith('/account/')?'Account security is temporarily unavailable. Please try again.':'Artwork service is temporarily unavailable. Please try again.'},503);}
  },
- async scheduled(_event,env,ctx){ctx.waitUntil(env.DB.batch([
+ async scheduled(_event,env,ctx){ctx.waitUntil((async()=>{await env.DB.batch([
   env.DB.prepare("UPDATE art_jobs SET image=NULL,state='expired' WHERE created_at<? AND state!='expired'").bind(Date.now()-3600000),
-  env.DB.prepare('DELETE FROM art_jobs WHERE created_at<?').bind(Date.now()-3*86400000)
- ]));}
+  env.DB.prepare('DELETE FROM art_jobs WHERE created_at<?').bind(Date.now()-3*86400000),
+  ...securityCleanupStatements(env)
+ ]);await cleanupAccounts(env);})());}
 };

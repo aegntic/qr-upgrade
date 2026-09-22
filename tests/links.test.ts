@@ -1,3 +1,5 @@
+import {migrate} from './fixtures/migrations';
+import {validAccountDeps} from './fixtures/account-deps';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
@@ -8,7 +10,7 @@ import {signAccountToken,type AccountConfig} from '../src/lib/server/account';
 const owner='a'.repeat(64),other='b'.repeat(64);
 const config:AccountConfig={clientId:'test',clientSecret:'test',secret:'s'.repeat(64),serviceUrl:'https://service.example',development:true};
 function database(){
- const sqlite=new DatabaseSync(':memory:');sqlite.exec(readFileSync(new URL('../workers/qr-service/migrations/0003_links.sql',import.meta.url),'utf8'));
+ const sqlite=new DatabaseSync(':memory:');migrate(sqlite);
  const wrap=(sql:string,params:any[]=[])=>({bind:(...p:any[])=>wrap(sql,p),first:async()=>sqlite.prepare(sql).get(...params)||null,all:async()=>({results:sqlite.prepare(sql).all(...params)}),sql,params});
  return {sqlite,DB:{prepare:wrap,async batch(statements:ReturnType<typeof wrap>[]){sqlite.exec('BEGIN');try{const results=statements.map(s=>({results:sqlite.prepare(s.sql).all(...s.params)}));sqlite.exec('COMMIT');return results;}catch(e){sqlite.exec('ROLLBACK');throw e;}}}};
 }
@@ -58,14 +60,14 @@ test('analytics limits daily series to 30 days while preserving lifetime totals'
 });
 test('identity and origin gates, bounded JSON, service failures, fixed forwarding identity',async()=>{
  assert.equal((await linksRequest(request('GET',undefined,'',''),{})).status,401);
- assert.equal((await linksProxy(request(),undefined,config)).status,401);
- const token=await signAccountToken({sub:owner,name:'User',email:'a@example.com'},'session',config);
+ assert.equal((await linksProxy(request(),undefined,config,{accountDeps:validAccountDeps(owner)})).status,401);
+ const token=await signAccountToken({sv:1,sub:owner,name:'User',email:'a@example.com'},'session',config);
  const make=(origin:string,body='{}')=>new Request('http://localhost:3040/api/links',{method:'POST',headers:{cookie:`qr-session=${token}`,origin,'Content-Type':'application/json','x-qr-user':other},body});
- assert.equal((await linksProxy(make('https://evil.example'),undefined,config)).status,403);
- assert.equal((await linksProxy(make('http://localhost:3040','x'.repeat(16385)),undefined,config)).status,400);
+ assert.equal((await linksProxy(make('https://evil.example'),undefined,config,{accountDeps:validAccountDeps(owner)})).status,403);
+ assert.equal((await linksProxy(make('http://localhost:3040','x'.repeat(16385)),undefined,config,{accountDeps:validAccountDeps(owner)})).status,400);
  await assert.rejects(()=>readLinkBody(new Request('https://example.com',{method:'POST',headers:{'Content-Type':'application/json'},body:'{'})));
  const original=globalThis.fetch;
- try{globalThis.fetch=async(_input,init)=>{const h=new Headers(init?.headers);assert.equal(h.get('x-qr-user'),owner);assert.equal(h.get('Authorization'),`Bearer ${config.secret}`);assert.ok(init?.signal);throw new Error('private failure detail');};const r=await linksProxy(make('http://localhost:3040'),undefined,config);assert.equal(r.status,503);assert.doesNotMatch(await r.text(),/private failure/);}finally{globalThis.fetch=original;}
+ try{globalThis.fetch=async(_input,init)=>{const h=new Headers(init?.headers);assert.equal(h.get('x-qr-user'),owner);assert.equal(h.get('Authorization'),`Bearer ${config.secret}`);assert.ok(init?.signal);throw new Error('private failure detail');};const r=await linksProxy(make('http://localhost:3040'),undefined,config,{accountDeps:validAccountDeps(owner)});assert.equal(r.status,503);assert.doesNotMatch(await r.text(),/private failure/);}finally{globalThis.fetch=original;}
  assert.equal((await linksRequest(request(),{DB:{prepare(){throw new Error('database');}}})).status,503);
 });
 test('public redirect has safe headers; HEAD resolves without counting; outages and invalid targets fail closed',async()=>{

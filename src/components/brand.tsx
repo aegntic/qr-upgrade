@@ -5,12 +5,13 @@ import { ArrowUpRight } from "lucide-react";
 export function Brand() {
   return (
     <Link href="/" className="brand" aria-label="QR Upgrade home">
-      <span className="brand-mark">
-        <i />
-        <i />
-        <i />
-        <b>↗</b>
-      </span>
+      <img
+        className="brand-mark"
+        src="/brand/qr-upgrade-logo-v3-128.png"
+        alt=""
+        width={42}
+        height={42}
+      />
       <span>
         QR <span className="brand-light">upgrade</span>
       </span>
@@ -53,6 +54,7 @@ export function Footer() {
         <Link href="/generator?mode=image">Image QR</Link>
         <Link href="/generator?mode=art">QR Art</Link>
         <Link href="/scan-lab">Scan Lab</Link>
+        <Link href="/campaign-kit">Campaign kit</Link>
         <Link href="/#qr-types">QR types</Link>
       </nav>
       <nav aria-label="Explore">
@@ -65,6 +67,7 @@ export function Footer() {
       <nav aria-label="Resources">
         <strong>Resources</strong>
         <Link href="/account">Your account</Link>
+        <Link href="/privacy">Privacy</Link>
         <Link href="/docs">Methodology</Link>
         <Link href="/ai">Product facts</Link>
         <Link href="/links">Dynamic links</Link>

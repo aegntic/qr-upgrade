@@ -1,12 +1,13 @@
 import ArtworkExhibition from "@/components/artwork-exhibition";
-import GeneratorStudio from "@/components/generator-studio";
-import GeneratorSections from "@/components/generator-sections";
+import LandingSections from "@/components/landing-sections";
+import "./landing.css";
 import { Schema } from "@/components/schema";
 import { site, description } from "@/lib/facts";
 export const metadata = { alternates: { canonical: "/" } };
 export default function Home() {
   return (
     <main id="main" className="foundation-page">
+      <div className="landing-home">
       <Schema
         data={{
           "@context": "https://schema.org",
@@ -43,15 +44,8 @@ export default function Home() {
         }}
       />
       <ArtworkExhibition />
-      <div className="studio-introduction" data-reveal>
-        <h2>Meet your new signature.</h2>
-        <p>
-          Choose a destination. Shape the image.
-          <br /> Make every connection your own.
-        </p>
+      <LandingSections />
       </div>
-      <GeneratorStudio initialArtwork="vinyl" />
-      <GeneratorSections />
     </main>
   );
 }

@@ -7,4 +7,4 @@ paths = ['''(^|/)(node_modules|\.next|\.expo|dist|build|Pods|\.git)/''', '''^com
 
 [[allowlists]]
 description = "Git-ignored local runtime secret store; never a deployment source"
-paths = ['''^\.env\.local$''']
+paths = ['''^\.env\.local$''', '''^\.dev\.vars(?:\..*)?$''']

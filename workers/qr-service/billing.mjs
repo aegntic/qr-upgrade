@@ -16,12 +16,26 @@ export async function billingRequest(r,env){
   }
   const owner=r.headers.get('x-qr-user');
   if(!/^[a-f0-9]{64}$/.test(owner||''))return reply({error:'Invalid owner'},401);
-  if(path==='/billing'&&r.method==='GET')return reply({binding:await env.DB.prepare('SELECT * FROM billing_customers WHERE owner=?').bind(owner).first()});
+  if(path==='/billing'&&r.method==='GET')return reply({binding:await env.DB.prepare('SELECT * FROM billing_customers WHERE owner=?').bind(owner).first(),customerPending:!!await env.DB.prepare('SELECT owner FROM billing_customer_creations WHERE owner=?').bind(owner).first()});
+  if(path==='/billing/customer-start'&&r.method==='POST'){
+   const b=await r.json();if(!['test','live'].includes(b.mode)||!token.test(b.token))return reply({error:'Invalid customer reservation'},400);
+   await env.DB.prepare('INSERT INTO billing_customer_creations(owner,mode,token,created_at) SELECT ?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM billing_customers WHERE owner=?) ON CONFLICT(owner) DO NOTHING').bind(owner,b.mode,b.token,Math.floor(Date.now()/1000),owner).run();
+   const creation=await env.DB.prepare('SELECT mode,token,created_at FROM billing_customer_creations WHERE owner=?').bind(owner).first();
+   if(creation&&creation.mode!==b.mode)return reply({error:'Customer reservation mode conflict'},409);
+   return reply({binding:await env.DB.prepare('SELECT * FROM billing_customers WHERE owner=?').bind(owner).first(),customerCreation:creation});
+  }
+  if(path==='/billing/customer-abort'&&r.method==='POST'){
+   const b=await r.json();if(!token.test(b.token))return reply({error:'Invalid customer reservation'},400);
+   await env.DB.prepare('DELETE FROM billing_customer_creations WHERE owner=? AND token=? AND NOT EXISTS(SELECT 1 FROM billing_customers WHERE owner=?)').bind(owner,b.token,owner).run();
+   return reply({binding:null});
+  }
   if(path==='/billing/customer'&&r.method==='PUT'){
    const b=await r.json();if(!customer.test(b.customerId)||!['test','live'].includes(b.mode))return reply({error:'Invalid customer'},400);
    await env.DB.prepare('INSERT INTO billing_customers(owner,customer_id,mode) VALUES(?,?,?) ON CONFLICT DO NOTHING RETURNING owner').bind(owner,b.customerId,b.mode).first();
    const row=await env.DB.prepare('SELECT * FROM billing_customers WHERE owner=?').bind(owner).first();
-   return row?.customer_id===b.customerId&&row?.mode===b.mode?reply({binding:row}):reply({error:'Customer binding conflict'},409);
+   if(row?.customer_id!==b.customerId||row?.mode!==b.mode)return reply({error:'Customer binding conflict'},409);
+   await env.DB.prepare('DELETE FROM billing_customer_creations WHERE owner=? AND mode=? AND EXISTS(SELECT 1 FROM billing_customers WHERE owner=? AND customer_id=? AND mode=?)').bind(owner,b.mode,owner,b.customerId,b.mode).run();
+   return reply({binding:row});
   }
   if(path==='/billing/checkout'&&r.method==='POST'){
    const b=await r.json(),now=Math.floor(Date.now()/1000);
@@ -32,6 +46,9 @@ export async function billingRequest(r,env){
     row=await env.DB.prepare('UPDATE billing_customers SET reservation=COALESCE(reservation,?),tier=COALESCE(tier,?),reserved_at=COALESCE(reserved_at,?),lease_until=? WHERE owner=? AND lease_until<=? RETURNING *').bind(b.token,b.tier,now,now+60,owner,now).first();
    }else if(b.action==='finalize'&&/^cs_[A-Za-z0-9_]{1,200}$/.test(b.sessionId)){
     row=await env.DB.prepare('UPDATE billing_customers SET session_id=?,lease_until=0 WHERE owner=? AND reservation=? RETURNING *').bind(b.sessionId,owner,b.token).first();
+   }else if(b.action==='closure-release'&&Number.isSafeInteger(b.revision)&&/^cs_[A-Za-z0-9_]{1,200}$/.test(b.sessionId)){
+    row=await env.DB.prepare('UPDATE billing_customers SET reservation=NULL,tier=NULL,reserved_at=NULL,session_id=NULL,lease_until=0 WHERE owner=? AND reservation=? AND session_id=? AND revision=? AND lease_until<=? RETURNING *').bind(owner,b.token,b.sessionId,b.revision,now).first();
+    if(row)row=await env.DB.prepare('SELECT * FROM billing_customers WHERE owner=?').bind(owner).first();
    }else if(b.action==='release'){
     row=await env.DB.prepare('UPDATE billing_customers SET reservation=NULL,tier=NULL,reserved_at=NULL,session_id=NULL,lease_until=0 WHERE owner=? AND reservation=? RETURNING *').bind(owner,b.token).first();
    }else return reply({error:'Invalid action'},400);

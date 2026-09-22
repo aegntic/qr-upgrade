@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, LoaderCircle, Sparkles } from "lucide-react";
 import "../app/ai-art.css";
+import { ART_STYLES, type ArtStyle as Style } from '../../shared/art-styles.mjs';
 
-type Style = "steel" | "glass" | "botanical" | "illustrated";
 type Service = { enabled: boolean; dailyLimit: number };
 type Job = { id: string; status: "pending" | "ready" | "failed"; image?: string; error?: string };
 type Variant = { id: string; image: string; prompt: string; style: Style };
@@ -14,12 +14,7 @@ class ResponseError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 
-const styles: { id: Style; label: string }[] = [
-  { id: "steel", label: "Steel" },
-  { id: "glass", label: "Glass" },
-  { id: "botanical", label: "Botanical" },
-  { id: "illustrated", label: "Illustrated" },
-];
+const styles = (Object.keys(ART_STYLES) as Style[]).map(id => ({ id, ...ART_STYLES[id] }));
 
 async function readError(response: Response, fallback: string) {
   try {
@@ -156,7 +151,7 @@ export default function AiArtPanel({ onApply }: { onApply: (image: string) => vo
       <div className="ai-art-heading">
         <div>
           <span className="section-kicker"><Sparkles size={12} /> Live AI artwork</span>
-          <h3 id="ai-art-title">Describe a new visual direction</h3>
+          <h3 id="ai-art-title">Give your QR another dimension.</h3>
         </div>
         <span className="ai-art-limit">3 generations per day</span>
       </div>
@@ -172,7 +167,7 @@ export default function AiArtPanel({ onApply }: { onApply: (image: string) => vo
               value={prompt}
               maxLength={800}
               rows={3}
-              placeholder="A luminous glass koi circling through deep blue water…"
+              placeholder="Flowing titanium ribbons, deep obsidian and luminous porcelain channels…"
               onChange={(event) => setPrompt(event.target.value)}
               disabled={busy}
             />
@@ -181,10 +176,11 @@ export default function AiArtPanel({ onApply }: { onApply: (image: string) => vo
           <div className="ai-art-styles" role="group" aria-label="Artwork style">
             {styles.map((option) => (
               <button key={option.id} aria-pressed={style === option.id} onClick={() => setStyle(option.id)} disabled={busy}>
-                {option.label}
+                {option.label}{option.dimensional ? ' · 3D look' : ''}
               </button>
             ))}
           </div>
+          <p className="ai-art-privacy">Sculpted depth, light and texture in a flat image. Apply the artwork to add your destination and check the finished QR.</p>
           <button className="ai-art-generate" onClick={generate} disabled={!validPrompt || busy}>
             {busy ? <LoaderCircle className="ai-art-spinner" size={15} /> : <Sparkles size={15} />}
             {status === "submitting" ? "Starting…" : status === "pending" ? "Creating artwork…" : variants.length || outstanding ? "Generate another" : "Generate artwork"}

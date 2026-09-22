@@ -10,5 +10,16 @@ const config: NextConfig = {
       },
     ];
   },
+  async rewrites() {
+    return [
+      {
+        source: "/opengraph-image",
+        destination: "/opengraph-image.jpg",
+      },
+    ];
+  },
 };
 export default config;
+
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
+if (process.env.NODE_ENV === "development") initOpenNextCloudflareForDev();

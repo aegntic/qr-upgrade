@@ -1,3 +1,6 @@
+import { withWebEntry } from '../cloudflare/runtime';
+import {migrate} from './fixtures/migrations';
+import {validAccountDeps} from './fixtures/account-deps';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
@@ -10,8 +13,8 @@ const owner='a'.repeat(64),other='b'.repeat(64),network='c'.repeat(64);
 const config:AccountConfig={clientId:'test',clientSecret:'test',secret:'s'.repeat(64),serviceUrl:'https://service.example',development:true};
 const draft=(kind:ContentDraft['kind']='links'):ContentDraft=>({kind,title:'My page',description:'Description',accent:'#123abc',items:kind==='links'?[{title:'Link',description:'',price:'',url:'https://example.com',assetId:''}]:[],fileId:'',formMessage:''});
 function environment(){
- const sqlite=new DatabaseSync(':memory:');sqlite.exec(readFileSync(new URL('../workers/qr-service/migrations/0004_content.sql',import.meta.url),'utf8'));const objects=new Map<string,Uint8Array>();
- const wrap=(sql:string,params:any[]=[])=>({bind:(...p:any[])=>wrap(sql,p),first:async()=>sqlite.prepare(sql).get(...params)||null,all:async()=>({results:sqlite.prepare(sql).all(...params)}),sql,params});
+ const sqlite=new DatabaseSync(':memory:');migrate(sqlite);const objects=new Map<string,Uint8Array>();
+ const wrap=(sql:string,params:any[]=[])=>({bind:(...p:any[])=>wrap(sql,p),first:async()=>sqlite.prepare(sql).get(...params)||null,all:async()=>({results:sqlite.prepare(sql).all(...params)}),run:async()=>sqlite.prepare(sql).run(...params),sql,params});
  return {sqlite,objects,ASSETS:{async put(key:string,bytes:Uint8Array){objects.set(key,bytes);},async delete(key:string){objects.delete(key);},async get(key:string){const v=objects.get(key);return v?{body:v}:null;}},DB:{prepare:wrap,async batch(statements:ReturnType<typeof wrap>[]){sqlite.exec('BEGIN');try{const results=statements.map(s=>({results:sqlite.prepare(s.sql).all(...s.params)}));sqlite.exec('COMMIT');return results;}catch(e){sqlite.exec('ROLLBACK');throw e;}}}};
 }
 function req(path='/content',method='GET',body?:unknown,user=owner,net=network){return new Request(`https://service.example${path}`,{method,headers:{'x-qr-user':user,'x-qr-network':net,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});}
@@ -80,15 +83,15 @@ test('forms enforce atomic daily and lifetime boundaries and last-100 limit',asy
  assert.equal((await publicContent(req(path,'POST',message,owner,'1'.repeat(64)),env)).status,429);const list=await (await contentRequest(req(`/content/${p.id}/submissions`),env)).json();assert.equal(list.total,1000);assert.equal(list.submissions.length,100);env.sqlite.close();
 });
 test('bounded bodies, private auth/origin, fixed proxy identity, trusted network header and failure behavior',async()=>{
- assert.equal((await contentProxy(req(),undefined,config)).status,401);assert.equal((await assetProxy(req(),undefined,config)).status,401);
- const token=await signAccountToken({sub:owner,name:'User',email:'user@example.com'},'session',config);
+ assert.equal((await contentProxy(req(),undefined,config,false,{accountDeps:validAccountDeps(owner)})).status,401);assert.equal((await assetProxy(req(),undefined,config,{accountDeps:validAccountDeps(owner)})).status,401);
+ const token=await signAccountToken({sv:1,sub:owner,name:'User',email:'user@example.com'},'session',config);
  const make=(origin='http://localhost:3040',body=JSON.stringify(draft()))=>new Request('http://localhost:3040/api/content',{method:'POST',headers:{cookie:`qr-session=${token}`,origin,'Content-Type':'application/json','x-qr-user':other,'x-qr-network':other,'x-forwarded-for':'8.8.8.8'},body});
- assert.equal((await contentProxy(make('https://evil.example'),undefined,config)).status,403);assert.equal((await contentProxy(make(undefined,'x'.repeat(32769)),undefined,config)).status,400);await assert.rejects(()=>readContentBody(req('/content','POST','x'.repeat(33000))));
- const original=globalThis.fetch;try{globalThis.fetch=async(_url,init)=>{const h=new Headers(init?.headers);assert.equal(h.get('Authorization'),`Bearer ${config.secret}`);assert.equal(h.get('x-qr-user'),owner);assert.equal(h.get('x-qr-network'),null);assert.ok(init?.signal);return Response.json({pages:[]});};assert.equal((await contentProxy(make(),undefined,config)).status,200);
+ assert.equal((await contentProxy(make('https://evil.example'),undefined,config,false,{accountDeps:validAccountDeps(owner)})).status,403);assert.equal((await contentProxy(make(undefined,'x'.repeat(32769)),undefined,config,false,{accountDeps:validAccountDeps(owner)})).status,400);await assert.rejects(()=>readContentBody(req('/content','POST','x'.repeat(33000))));
+ const original=globalThis.fetch;try{globalThis.fetch=async(_url,init)=>{const h=new Headers(init?.headers);assert.equal(h.get('Authorization'),`Bearer ${config.secret}`);assert.equal(h.get('x-qr-user'),owner);assert.equal(h.get('x-qr-network'),null);assert.ok(init?.signal);return Response.json({pages:[]});};assert.equal((await contentProxy(make(),undefined,config,false,{accountDeps:validAccountDeps(owner)})).status,200);
  let captured='';globalThis.fetch=async(_url,init)=>{const h=new Headers(init?.headers);captured=h.get('x-qr-network')!;assert.match(captured,/^[a-f0-9]{64}$/);assert.notEqual(captured,other);assert.equal(h.get('x-qr-user'),null);return Response.json({received:true}, {status:201});};assert.equal((await publicSubmission(make(), 'a'.repeat(16),config)).status,201);
  const production={...config,development:false};const publicReq=new Request('https://qrupgrade.com/api/content/public/'+ 'a'.repeat(16)+'/submissions',{method:'POST',headers:{origin:'https://qrupgrade.com','Content-Type':'application/json','x-forwarded-for':'8.8.8.8'},body:JSON.stringify(message)});assert.equal((await publicSubmission(publicReq,'a'.repeat(16),production)).status,503);
- const trusted=new Request(publicReq,{headers:{origin:'https://qrupgrade.com','Content-Type':'application/json','x-vercel-forwarded-for':'8.8.8.8'}});assert.equal((await publicSubmission(trusted,'a'.repeat(16),production)).status,201);
- globalThis.fetch=async()=>new Response('',{status:404});assert.equal(await getPublicContent('a'.repeat(16),config),null);globalThis.fetch=async()=>{throw new Error('private details');};await assert.rejects(()=>getPublicContent('a'.repeat(16),config));const failed=await contentProxy(make(),undefined,config);assert.equal(failed.status,503);assert.doesNotMatch(await failed.text(),/private details/);assert.equal((await publicContentAsset(req(),'a'.repeat(16),crypto.randomUUID(),config)).status,503);
+ const trusted=new Request(publicReq,{headers:{origin:'https://qrupgrade.com','Content-Type':'application/json','x-vercel-forwarded-for':'8.8.8.8'}});assert.equal((await withWebEntry({},'8.8.8.8',()=>publicSubmission(trusted,'a'.repeat(16),production))).status,201);
+ globalThis.fetch=async()=>new Response('',{status:404});assert.equal(await getPublicContent('a'.repeat(16),config),null);globalThis.fetch=async()=>{throw new Error('private details');};await assert.rejects(()=>getPublicContent('a'.repeat(16),config));const failed=await contentProxy(make(),undefined,config,false,{accountDeps:validAccountDeps(owner)});assert.equal(failed.status,503);assert.doesNotMatch(await failed.text(),/private details/);assert.equal((await publicContentAsset(req(),'a'.repeat(16),crypto.randomUUID(),config)).status,503);
  }finally{globalThis.fetch=original;}
 });
 test('publish rejects a draft changed after validation and keeps the prior public snapshot',async()=>{

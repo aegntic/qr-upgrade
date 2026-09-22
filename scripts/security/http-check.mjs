@@ -1,9 +1,13 @@
 import { spawn } from "node:child_process";
 import assert from "node:assert/strict";
 import { setTimeout as delay } from "node:timers/promises";
+import { childExited, readHttpResponse } from "./http.mjs";
 import { root } from "./source.mjs";
 const port = Number(process.env.SECURITY_CHECK_PORT || 3029),
-  origin = `http://127.0.0.1:${port}`;
+  origin = `http://127.0.0.1:${port}`,
+  readinessBudgetMs = 30000,
+  readinessAttemptMs = 5000,
+  requestDeadlineMs = 15000;
 const server = spawn(
   process.execPath,
   [
@@ -25,17 +29,40 @@ server.stdout.on("data", (b) => (output += b));
 server.stderr.on("data", (b) => (output += b));
 try {
   let response;
-  for (let attempt = 0; attempt < 60; attempt++) {
-    if (server.exitCode !== null)
+  let readinessError;
+  const readinessDeadline = Date.now() + readinessBudgetMs;
+  while (Date.now() < readinessDeadline) {
+    if (childExited(server))
       throw new Error("Isolated server failed to start: " + output);
     try {
-      response = await fetch(origin, { signal: AbortSignal.timeout(1000) });
+      response = await readHttpResponse(
+        origin,
+        {},
+        Math.max(
+          1,
+          Math.min(readinessAttemptMs, readinessDeadline - Date.now()),
+        ),
+        "Readiness request GET /",
+      );
       break;
-    } catch {
-      await delay(200);
+    } catch (error) {
+      readinessError = error;
+      if (childExited(server))
+        throw new Error("Isolated server failed to start: " + output, {
+          cause: error,
+        });
+      const remaining = readinessDeadline - Date.now();
+      if (remaining > 0) await delay(Math.min(200, remaining));
     }
   }
-  assert.ok(response?.ok, "Isolated production server did not become ready.");
+  assert.ok(
+    response,
+    `Isolated production server did not become ready within ${readinessBudgetMs}ms.${readinessError instanceof Error ? ` Last error: ${readinessError.message}` : ""}`,
+  );
+  assert.ok(
+    response.ok,
+    "Isolated production server readiness status was not OK.",
+  );
   const csp = response.headers.get("content-security-policy") || "";
   const nonce = csp.match(/'nonce-([^']+)'/)?.[1];
   assert.ok(nonce);
@@ -54,7 +81,7 @@ try {
   );
   assert.match(response.headers.get("permissions-policy") || "", /camera=\(\)/);
   assert.match(response.headers.get("cache-control") || "", /no-store/);
-  const html = await response.text();
+  const html = response.body;
   for (const tag of html.matchAll(/<script\b[^>]*>/g))
     assert.ok(
       tag[0].includes(`nonce="${nonce}"`),
@@ -74,29 +101,44 @@ try {
     "/dynamic",
     "/brand-kits",
   ]) {
-    const page = await fetch(origin + route);
+    const page = await readHttpResponse(
+      origin + route,
+      {},
+      requestDeadlineMs,
+      `Security request GET ${route}`,
+    );
     assert.equal(page.status, 200, route + " status");
     const pagePolicy = page.headers.get("content-security-policy") || "";
     const pageNonce = pagePolicy.match(/'nonce-([^']+)'/)?.[1];
     assert.ok(pageNonce, route + " needs a CSP nonce");
-    const content = await page.text();
+    const content = page.body;
     for (const tag of content.matchAll(/<script\b[^>]*>/g))
       assert.ok(
         tag[0].includes(`nonce="${pageNonce}"`),
         route + " emitted an unprotected script",
       );
   }
-  const again = await fetch(origin);
+  const again = await readHttpResponse(
+    origin,
+    {},
+    requestDeadlineMs,
+    "Nonce freshness request GET /",
+  );
   assert.notEqual(
     again.headers.get("content-security-policy"),
     csp,
     "Each request needs a fresh nonce.",
   );
-  const api = await fetch(origin + "/api/v1/scan", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: "{}",
-  });
+  const api = await readHttpResponse(
+    origin + "/api/v1/scan",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    },
+    requestDeadlineMs,
+    "Disabled API request POST /api/v1/scan",
+  );
   assert.equal(api.status, 404);
   assert.equal(api.headers.get("cache-control"), "no-store");
   console.log(
@@ -105,7 +147,7 @@ try {
 } finally {
   server.kill("SIGTERM");
   await new Promise((resolve) => {
-    if (server.exitCode !== null) return resolve();
+    if (childExited(server)) return resolve();
     server.once("exit", resolve);
     setTimeout(() => {
       server.kill("SIGKILL");

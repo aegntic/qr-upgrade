@@ -7,6 +7,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/scan-lab",
     "/templates",
     "/docs",
+    "/privacy",
     "/ai",
     "/blog",
     "/pricing",

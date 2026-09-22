@@ -16,13 +16,16 @@ export function useTheme() {
   const dark = useColorScheme() === "dark";
   return {
     dark,
-    bg: dark ? "#121b17" : "#f6f5ef",
-    panel: dark ? "#1e2b24" : "#ffffff",
-    ink: dark ? "#f0f3e9" : "#193c2f",
-    muted: dark ? "#b4c0b5" : "#637169",
-    line: dark ? "#38463d" : "#dce2d8",
-    accent: "#daed75",
-    error: dark ? "#ffbd9c" : "#9c482c",
+    bg: dark ? "#080b10" : "#f1f4f7",
+    panel: dark ? "#121821" : "#ffffff",
+    panelRaised: dark ? "#19212c" : "#f8fafc",
+    ink: dark ? "#f4f7fa" : "#17202a",
+    muted: dark ? "#9ba8b7" : "#5d6977",
+    line: dark ? "#2c3744" : "#d4dbe3",
+    accent: dark ? "#a9c7e3" : "#8db5d8",
+    accentInk: "#0b121a",
+    error: dark ? "#ffaaa5" : "#a23f3b",
+    success: dark ? "#8bd8ba" : "#247356",
   };
 }
 export function Page({ children }: { children: React.ReactNode }) {
@@ -149,7 +152,7 @@ export function Button({
         justifyContent: "center",
         alignItems: "center",
         padding: 14,
-        backgroundColor: secondary ? t.panel : t.accent,
+        backgroundColor: secondary ? (pressed ? t.panelRaised : t.panel) : t.accent,
         borderWidth: secondary ? 1 : 0,
         borderColor: t.line,
         opacity: disabled ? 0.4 : pressed ? 0.7 : 1,
@@ -159,7 +162,7 @@ export function Button({
         style={{
           fontWeight: "700",
           fontSize: 15,
-          color: secondary ? t.ink : "#193c2f",
+          color: secondary ? t.ink : t.accentInk,
         }}
       >
         {title}

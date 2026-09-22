@@ -1,0 +1,54 @@
+-- Apply after 0006. Closed identities cannot be registered again.
+ALTER TABLE account_security ADD COLUMN lifecycle TEXT NOT NULL DEFAULT 'active' CHECK(lifecycle IN ('active','closed'));
+ALTER TABLE account_security ADD COLUMN deletion_id TEXT;
+ALTER TABLE billing_customers ADD COLUMN revision INTEGER NOT NULL DEFAULT 0;
+CREATE TRIGGER billing_revision AFTER UPDATE ON billing_customers WHEN NEW.revision=OLD.revision BEGIN
+ UPDATE billing_customers SET revision=revision+1 WHERE owner=NEW.owner;
+END;
+CREATE TABLE account_deletion_intents(id TEXT PRIMARY KEY,owner TEXT NOT NULL REFERENCES account_security(owner),version INTEGER NOT NULL,expires_at INTEGER NOT NULL,consumed INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX account_deletion_intents_expiry ON account_deletion_intents(expires_at);
+CREATE TABLE account_deletions(id TEXT PRIMARY KEY,owner TEXT NOT NULL UNIQUE REFERENCES account_security(owner),version INTEGER NOT NULL,accepted_at INTEGER NOT NULL,ledger_ready INTEGER NOT NULL DEFAULT 0,complete INTEGER NOT NULL DEFAULT 0,scan_prefix INTEGER NOT NULL DEFAULT 0,scan_cursor TEXT,scanned INTEGER NOT NULL DEFAULT 0,last_sweep INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE account_uploads(r2key TEXT PRIMARY KEY,owner TEXT NOT NULL,version INTEGER NOT NULL,state TEXT NOT NULL CHECK(state IN ('pending','settled')));
+CREATE INDEX account_uploads_owner ON account_uploads(owner,state);
+CREATE TABLE account_deletion_objects(owner TEXT NOT NULL,r2key TEXT NOT NULL,PRIMARY KEY(owner,r2key));
+CREATE TRIGGER cloud_designs_closed_insert BEFORE INSERT ON cloud_designs WHEN EXISTS(SELECT 1 FROM account_security WHERE owner=NEW.owner AND lifecycle='closed') BEGIN SELECT RAISE(ABORT,'account closed'); END;
+CREATE TRIGGER cloud_designs_closed_update BEFORE UPDATE ON cloud_designs WHEN EXISTS(SELECT 1 FROM account_security WHERE owner=NEW.owner AND lifecycle='closed') BEGIN SELECT RAISE(ABORT,'account closed'); END;
+CREATE TRIGGER dynamic_links_closed_insert BEFORE INSERT ON dynamic_links WHEN EXISTS(SELECT 1 FROM account_security WHERE owner=NEW.owner AND lifecycle='closed') BEGIN SELECT RAISE(ABORT,'account closed'); END;
+CREATE TRIGGER dynamic_links_closed_update BEFORE UPDATE ON dynamic_links WHEN EXISTS(SELECT 1 FROM account_security WHERE owner=NEW.owner AND lifecycle='closed') BEGIN SELECT RAISE(ABORT,'account closed'); END;
+CREATE TRIGGER content_pages_closed_insert BEFORE INSERT ON content_pages WHEN EXISTS(SELECT 1 FROM account_security WHERE owner=NEW.owner AND lifecycle='closed') BEGIN SELECT RAISE(ABORT,'account closed'); END;
+CREATE TRIGGER content_pages_closed_update BEFORE UPDATE ON content_pages WHEN EXISTS(SELECT 1 FROM account_security WHERE owner=NEW.owner AND lifecycle='closed') BEGIN SELECT RAISE(ABORT,'account closed'); END;
+CREATE TRIGGER content_assets_closed_insert BEFORE INSERT ON content_assets WHEN EXISTS(SELECT 1 FROM account_security WHERE owner=NEW.owner AND lifecycle='closed') BEGIN SELECT RAISE(ABORT,'account closed'); END;
+CREATE TRIGGER content_assets_closed_update BEFORE UPDATE ON content_assets WHEN EXISTS(SELECT 1 FROM account_security WHERE owner=NEW.owner AND lifecycle='closed') BEGIN SELECT RAISE(ABORT,'account closed'); END;
+CREATE TRIGGER billing_customers_closed_insert BEFORE INSERT ON billing_customers WHEN EXISTS(SELECT 1 FROM account_security WHERE owner=NEW.owner AND lifecycle='closed') BEGIN SELECT RAISE(ABORT,'account closed'); END;
+CREATE TRIGGER billing_customers_closed_update BEFORE UPDATE ON billing_customers WHEN EXISTS(SELECT 1 FROM account_security WHERE owner=NEW.owner AND lifecycle='closed') BEGIN SELECT RAISE(ABORT,'account closed'); END;
+CREATE TRIGGER account_uploads_closed_insert BEFORE INSERT ON account_uploads WHEN EXISTS(SELECT 1 FROM account_security WHERE owner=NEW.owner AND lifecycle='closed') BEGIN SELECT RAISE(ABORT,'account closed'); END;
+CREATE TRIGGER content_submissions_closed_insert BEFORE INSERT ON content_submissions WHEN EXISTS(SELECT 1 FROM content_pages p JOIN account_security a ON a.owner=p.owner WHERE p.id=NEW.page_id AND a.lifecycle='closed') BEGIN SELECT RAISE(ABORT,'account closed'); END;
+CREATE TRIGGER content_submissions_closed_update BEFORE UPDATE ON content_submissions WHEN EXISTS(SELECT 1 FROM content_pages p JOIN account_security a ON a.owner=p.owner WHERE p.id=NEW.page_id AND a.lifecycle='closed') BEGIN SELECT RAISE(ABORT,'account closed'); END;
+CREATE TRIGGER link_daily_counts_closed_insert BEFORE INSERT ON link_daily_counts WHEN EXISTS(SELECT 1 FROM dynamic_links p JOIN account_security a ON a.owner=p.owner WHERE p.slug=NEW.slug AND a.lifecycle='closed') BEGIN SELECT RAISE(ABORT,'account closed'); END;
+CREATE TRIGGER link_daily_counts_closed_update BEFORE UPDATE ON link_daily_counts WHEN EXISTS(SELECT 1 FROM dynamic_links p JOIN account_security a ON a.owner=p.owner WHERE p.slug=NEW.slug AND a.lifecycle='closed') BEGIN SELECT RAISE(ABORT,'account closed'); END;
+CREATE TRIGGER account_lifecycle_monotonic BEFORE UPDATE ON account_security WHEN NEW.session_version<OLD.session_version OR (OLD.lifecycle='closed' AND (NEW.lifecycle!='closed' OR NEW.deletion_id IS NOT OLD.deletion_id)) BEGIN SELECT RAISE(ABORT,'account lifecycle cannot rewind'); END;
+CREATE TRIGGER account_security_events_closed_insert BEFORE INSERT ON account_security_events WHEN EXISTS(SELECT 1 FROM account_security WHERE owner=NEW.owner AND lifecycle='closed') BEGIN SELECT RAISE(ABORT,'account closed'); END;
+CREATE TRIGGER cloud_designs_immutable_owner BEFORE UPDATE ON cloud_designs WHEN NEW.owner!=OLD.owner BEGIN SELECT RAISE(ABORT,'immutable owner'); END;
+CREATE TRIGGER dynamic_links_immutable_owner BEFORE UPDATE ON dynamic_links WHEN NEW.owner!=OLD.owner BEGIN SELECT RAISE(ABORT,'immutable owner'); END;
+CREATE TRIGGER content_pages_immutable_owner BEFORE UPDATE ON content_pages WHEN NEW.owner!=OLD.owner BEGIN SELECT RAISE(ABORT,'immutable owner'); END;
+CREATE TRIGGER content_assets_immutable_owner BEFORE UPDATE ON content_assets WHEN NEW.owner!=OLD.owner BEGIN SELECT RAISE(ABORT,'immutable owner'); END;
+CREATE TRIGGER billing_customers_immutable_owner BEFORE UPDATE ON billing_customers WHEN NEW.owner!=OLD.owner BEGIN SELECT RAISE(ABORT,'immutable owner'); END;
+CREATE TRIGGER account_uploads_immutable_owner BEFORE UPDATE ON account_uploads WHEN NEW.owner!=OLD.owner BEGIN SELECT RAISE(ABORT,'immutable owner'); END;
+CREATE TRIGGER account_security_immutable_owner BEFORE UPDATE ON account_security WHEN NEW.owner!=OLD.owner BEGIN SELECT RAISE(ABORT,'immutable owner'); END;
+CREATE INDEX account_deletions_sweep ON account_deletions(last_sweep,id);
+CREATE INDEX account_deletion_intents_owner ON account_deletion_intents(owner,consumed);
+CREATE INDEX cloud_designs_key ON cloud_designs(r2key);
+CREATE INDEX cloud_designs_cleanup ON cloud_designs(owner,id);
+CREATE INDEX content_assets_cleanup ON content_assets(owner,id);
+CREATE INDEX content_pages_cleanup ON content_pages(owner,id);
+-- A charge-free Stripe customer create still needs an attributable, durable pre-create fence.
+CREATE TABLE billing_customer_creations(owner TEXT PRIMARY KEY,mode TEXT NOT NULL CHECK(mode IN ('test','live')),token TEXT NOT NULL,created_at INTEGER NOT NULL);
+CREATE TRIGGER billing_customer_creations_closed_insert BEFORE INSERT ON billing_customer_creations WHEN EXISTS(SELECT 1 FROM account_security WHERE owner=NEW.owner AND lifecycle='closed') BEGIN SELECT RAISE(ABORT,'account closed'); END;
+CREATE TRIGGER billing_customer_creations_immutable BEFORE UPDATE ON billing_customer_creations BEGIN SELECT RAISE(ABORT,'immutable customer creation'); END;
+
+-- One active confirmation challenge per owner; callbacks consume it transactionally.
+CREATE TABLE account_deletion_challenges(owner TEXT PRIMARY KEY REFERENCES account_security(owner),challenge TEXT NOT NULL UNIQUE,version INTEGER NOT NULL,expires_at INTEGER NOT NULL,consumed INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX account_deletion_challenges_expiry ON account_deletion_challenges(expires_at);
+ALTER TABLE account_deletions ADD COLUMN manifest_cursor TEXT;
+ALTER TABLE account_deletions ADD COLUMN uploads_cursor TEXT;
+CREATE INDEX account_uploads_cleanup ON account_uploads(owner,state,r2key);

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "scope": "QR Upgrade local-first web, Android and iOS prototype",
+  "scope": "QR Upgrade hosted web service and Android/native previews; Apple device distribution deferred",
   "certification": "none",
   "frameworks": [
     "SOC 2 readiness: security; other categories subject to approved scope",
@@ -74,6 +74,11 @@
       "id": "T13",
       "title": "Mobile software inventory",
       "method": "CycloneDX SBOM"
+    },
+    {
+      "id": "T14",
+      "title": "Cloudflare runtime and clean artifact boundaries",
+      "method": "Isolated Next/OpenNext build, dry-run size checks, output secret scan and local workerd nonce, headers, binding and signed-webhook checks"
     }
   ],
   "manual": [
@@ -106,7 +111,7 @@
       "title": "Production identity, MFA and least privilege",
       "maxAgeDays": 30,
       "area": "Access control",
-      "requiredEvidence": "Prove SSO/MFA and least privilege on GitHub, hosting, DNS, secrets, Apple, Google and Expo; record emergency access.",
+      "requiredEvidence": "Prove MFA and least privilege on GitHub, hosting, DNS, secrets, Google and Expo; record emergency access. Apple account controls apply before Apple device distribution, currently deferred by the owner.",
       "bindToSource": false
     },
     {
@@ -194,7 +199,7 @@
       "title": "Physical native-device validation",
       "maxAgeDays": 90,
       "area": "Mobile release",
-      "requiredEvidence": "On iOS and Android validate permissions, background/snapshot privacy, files/exports, no cleartext traffic, backup settings and camera behavior.",
+      "requiredEvidence": "On an Android device validate permissions, background/snapshot privacy, files/exports, no cleartext traffic, backup settings and camera behavior for the current release. Equivalent iOS device validation is required before Apple device distribution; simulator evidence does not substitute for it.",
       "bindToSource": true
     },
     {
@@ -202,7 +207,7 @@
       "title": "Signed native artifacts and store disclosures",
       "maxAgeDays": 90,
       "area": "Mobile release",
-      "requiredEvidence": "Record APK/AAB/IPA hashes, release signing identities, no debug signing, binary manifests, privacy declarations, store data-safety disclosures and review approval.",
+      "requiredEvidence": "For the current Android release record APK/AAB hashes, release signing identities, no debug signing, binary manifests, privacy declarations, store data-safety disclosures and required store review approval. Record iOS simulator evidence separately; IPA signing and Apple store disclosures/review are required before the currently deferred Apple device distribution.",
       "bindToSource": true
     },
     {

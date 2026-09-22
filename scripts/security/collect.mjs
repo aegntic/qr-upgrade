@@ -80,6 +80,7 @@ const tasks = [
       "src",
       "shared",
       "workers",
+      "cloudflare",
       "mobile/app",
       "mobile/src",
       "mobile/plugins",
@@ -99,6 +100,7 @@ const tasks = [
   ["T11", "node", ["scripts/security/http-check.mjs"], "."],
   ["T12", "npm", ["sbom", "--sbom-format=cyclonedx"], "."],
   ["T13", "npm", ["sbom", "--sbom-format=cyclonedx"], "mobile"],
+  ["T14", "node", ["scripts/security/cloudflare-check.mjs"], "."],
 ];
 for (const [id, tool, args, cwd, extra] of tasks) {
   process.stdout.write(`${id}: ${tool} check started\n`);
