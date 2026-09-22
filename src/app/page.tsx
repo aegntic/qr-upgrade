@@ -6,7 +6,8 @@ import { site, description } from "@/lib/facts";
 export const metadata = { alternates: { canonical: "/" } };
 export default function Home() {
   return (
-    <main id="main" className="landing-home">
+    <main id="main" className="foundation-page">
+      <div className="landing-home">
       <Schema
         data={{
           "@context": "https://schema.org",
@@ -44,6 +45,7 @@ export default function Home() {
       />
       <ArtworkExhibition />
       <LandingSections />
+      </div>
     </main>
   );
 }
