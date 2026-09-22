@@ -73,3 +73,7 @@ Applicability is still a legal/operator decision. For an APP entity, OAIC APP11 
 Where GDPR applies, EDPB guidance calls for transparent rights handling and response within one month; a justified extension requires notice within that month. The app's export/deletion tools assist with requests but do not decide applicability, legal exceptions, identity disputes or processor/customer responsibilities. Source: https://www.edpb.europa.eu/sme/be-compliant/respect-individuals-rights_en
 
 The operator must define a monitored route for manual rights requests, including requests from feedback submitters without an app account, correction/restriction/objection, subscription-related deletion, inaccessible accounts, backups and legally retained payment records. Do not make a general compliance promise based only on account self-service.
+
+## Publication status (engineering)
+
+`/privacy` was published on 22 September 2026 (Australia/Sydney) with operator Mattae Cooper / Australia. The draft sections above remain the working source text; placeholders were replaced on the live page with engineering-limited wording only.

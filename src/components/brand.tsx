@@ -67,6 +67,7 @@ export function Footer() {
       <nav aria-label="Resources">
         <strong>Resources</strong>
         <Link href="/account">Your account</Link>
+        <Link href="/privacy">Privacy</Link>
         <Link href="/docs">Methodology</Link>
         <Link href="/ai">Product facts</Link>
         <Link href="/links">Dynamic links</Link>
