@@ -4,7 +4,7 @@ Engineering work continues. This document does not approve release, accept risk,
 
 | Decision | Concrete state | Needed action |
 |---|---|---|
-| Operator and public contacts | Public notices drafted; Stripe identifies Mattae Cooper in Australia. QR Upgrade operator/public-contact confirmation is pending; no identity/contact placeholders published | Confirm legal individual/company and country; name security/privacy owner and public support/privacy/security contact |
+| Operator and public contacts | Confirmed 22 Sep 2026 by owner via Overseer: Mattae Cooper / Australia as public contacts. Public notices drafted; Stripe identifies Mattae Cooper in Australia. | Publish confirmed contacts on public notices when ready; name security/privacy owner roles if distinct |
 | Stripe application access | Live merchant active; dedicated Pro USD12/month and Brand USD25/month catalog created; application billing remains disabled | Restricted key created, exact approved scope read back, and live app-specific portal configured; finish runtime connection, webhook and legal/tax/refund review |
 | Hosting | Vercel Hobby cannot support commercial use | Owner chose migration to existing Cloudflare; runtime/security/domain verification required before cutover. Any new plan purchase needs its exact price/terms presented first |
 | Cloudflare account security | Sole administrator; MFA reported inactive | Enroll authenticator/security key personally and secure recovery codes |

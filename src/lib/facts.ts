@@ -3,6 +3,10 @@ export const description =
   "Create sculptural QR artwork with a 3D look. Check the finished image and turn it into social and print campaign assets.";
 export const faqs = [
   {
+    q: "Can I share my finished QR artwork?",
+    a: "After exporting a checked design, you can opt into a separate QR Upgrade showcase card, preview it and share or download it. The card is prepared and decoded on your device at full and half size. Its creation link contains no copy of your destination or design, but the QR image itself still carries its encoded information. Only share content you intend others to read; test the image again after a social platform resizes it.",
+  },
+  {
     q: "Are these actual 3D models?",
     a: "No. QR Upgrade creates flat QR images with the appearance of sculpted depth, light and materials. Steel, glass, ceramic and embossed-paper AI directions are available when generation is connected. The browser adds and tests the QR pattern after generation; a generated artwork alone is not assumed scannable.",
   },
@@ -63,7 +67,7 @@ export const sources = [
   },
   { label: "jsQR: image decoding", url: "https://github.com/cozmo/jsQR" },
 ];
-export const summary = `# QR Upgrade\n\n> ${description}\n\nStatus: working preview, not a launched subscription service.\n\n## Product\n- [QR Studio](${site}/generator): Create artistic QR images for links, Wi-Fi, contacts, messages, email, events and locations.\n- [Scan Lab](${site}/scan-lab): Preview placement and inspect print settings.\n- [Methodology](${site}/docs): Scoring, decoding, and limitations.\n- [Product facts](${site}/ai): Current capabilities and planned features.\n- [Full reference](${site}/llms-full.txt): Public first-party product information.\n\nNo private uploads, passwords, campaign data, or customer information is included here.\n`;
+export const summary = `# QR Upgrade\n\n> ${description}\n\nStatus: public web studio. Account features require sign-in; check Your account and Billing for current availability. Native store releases are not established by this reference.\n\n## Product\n- [QR Studio](${site}/generator): Create artistic QR images for links, Wi-Fi, contacts, messages, email, events and locations.\n- [Scan Lab](${site}/scan-lab): Preview placement and inspect print settings.\n- [Methodology](${site}/docs): Scoring, decoding, and limitations.\n- [Product facts](${site}/ai): Current capabilities and planned features.\n- [Review guide](${site}/press): Try the product and inspect its evidence and limits.\n- [Full reference](${site}/llms-full.txt): Public first-party product information.\n\nNo private uploads, passwords, campaign data, or customer information is included here.\n`;
 export const fullFacts =
   summary +
   "\n## Questions and answers\n" +

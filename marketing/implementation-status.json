@@ -1,0 +1,89 @@
+{
+  "checkedAt": "2026-09-21",
+  "skills": {
+    "installed": 67,
+    "codex": "/home/ae/.codex/skills",
+    "claude": "/home/ae/.claude/skills",
+    "manifest": "installed-skills.json"
+  },
+  "runtimes": {
+    "seo": "0.2.40",
+    "newsjack": "0.1.19",
+    "claudeSeo": "2.3.1; doctor ready including browser",
+    "remotion": "4.0.526",
+    "fastlane": "2.240.1"
+  },
+  "recurring": {
+    "id": "qrupgrade-daily-discovery-check",
+    "status": "ACTIVE",
+    "cadence": "Daily at 08:00 Australia/Sydney; includes Monday weekly review",
+    "pauseFile": ".agents/loops/PAUSED"
+  },
+  "webChanges": "Live deployment reported by owner on 2026-09-23. Public methodology, reviewer guide, privacy page and distinct public metadata verified live; individual account and export workflows not re-tested in this check.",
+  "pending": [
+    "Owner-authorized Search Console and analytics connection",
+    "Higgsfield and ElevenLabs account/usage allowance",
+    "NotFair/Medialyst/X/social account connections",
+    "Docker socket access: OpenSEO/Activepieces configs validated, services not started",
+    "Mac/Xcode/real device and store accounts for native screenshot/release work",
+    "Optional Whisper and face-tracking dependencies for arbitrary source-video transcription/cropping; local captioned launch render works",
+    "Physical-phone and social-platform scan checks"
+  ],
+  "verification": {
+    "fullTestRunPassed": 355,
+    "finalFocusedTestsPassed": 5,
+    "finalFocusedIncludesNewRegression": true,
+    "typecheck": "passed",
+    "nextProductionBuild": "passed",
+    "cloudflareAdapterAndWorkerd": "passed in isolated synthetic environment",
+    "runtimeNpmAuditKnownVulnerabilities": 0,
+    "publicProductionBuildDiscovery": {
+      "pages": 9,
+      "issues": 0
+    },
+    "liveDiscovery": {
+      "pages": 11,
+      "issues": 10,
+      "newSinceBaseline": 0
+    },
+    "video": "Two silent H.264 files, 30 seconds, 30fps; reference decoder checked full and resized CTA frames"
+  },
+  "videoSha256": {
+    "scan-the-art-landscape.mp4": "c0f6cf64475a8272f42c39fa082cd643dbfa5f3010a19f3f04a7e34577bfb2f2",
+    "scan-the-art-portrait.mp4": "c2dd7917d75a8243750a05ba1748a6a2c0950d12538c38beed60bbb8d5f8ea8a"
+  },
+  "liveStatusCheckedAt": "2026-09-23T03:38:00.614Z",
+  "liveStatus": {
+    "complete": true,
+    "pageCount": 12,
+    "issueCount": 4,
+    "issues": [
+      {
+        "id": "/pricing:sitemap-redirect",
+        "path": "/pricing",
+        "code": "sitemap-redirect",
+        "message": "Sitemap points to a redirect rather than a canonical page."
+      },
+      {
+        "id": "/pricing:sitemap-noindex",
+        "path": "/pricing",
+        "code": "sitemap-noindex",
+        "message": "Sitemap leads to a page that asks search engines not to index it."
+      },
+      {
+        "id": "/dynamic:sitemap-redirect",
+        "path": "/dynamic",
+        "code": "sitemap-redirect",
+        "message": "Sitemap points to a redirect rather than a canonical page."
+      },
+      {
+        "id": "/dynamic:sitemap-noindex",
+        "path": "/dynamic",
+        "code": "sitemap-noindex",
+        "message": "Sitemap leads to a page that asks search engines not to index it."
+      }
+    ],
+    "scope": "Public HTTP and metadata check; historical build/tests and integration dependencies below are from 2026-09-21, not a certification of the current release."
+  },
+  "pendingLastVerifiedAt": "2026-09-21; reconfirm each integration before treating it as currently blocked"
+}

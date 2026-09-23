@@ -3,6 +3,7 @@ import { faqs, sources, site } from "@/lib/facts";
 import { Schema } from "@/components/schema";
 export const metadata = {
   title: "Print checks and methodology",
+  description: "How QR Upgrade checks finished QR artwork, protects the quiet zone and prepares exports. Understand the scan tests and physical print limitations.",
   alternates: { canonical: "/docs" },
 };
 export default function Docs() {

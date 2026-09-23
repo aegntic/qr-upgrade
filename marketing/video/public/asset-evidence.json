@@ -1,0 +1,77 @@
+{
+  "capturedAt": "2026-09-21T03:42:20.991Z",
+  "captures": [
+    {
+      "art": "tiger",
+      "source": "QRUpgrade local editor",
+      "ready": true,
+      "expectedDestination": "https://qrupgrade.com/"
+    },
+    {
+      "art": "coffee",
+      "source": "QRUpgrade local editor",
+      "ready": true,
+      "expectedDestination": "https://qrupgrade.com/"
+    },
+    {
+      "art": "vinyl",
+      "source": "QRUpgrade local editor",
+      "ready": true,
+      "expectedDestination": "https://qrupgrade.com/"
+    }
+  ],
+  "kit": {
+    "version": 1,
+    "createdAt": "2026-09-21T03:42:20.928Z",
+    "decoder": "jsQR",
+    "payloadSha256": "d7804ee1f5670e4341755238cc5aea4a44456bfd63c3d60f71eb3d13203227cb",
+    "checks": [
+      {
+        "file": "qr-artwork.png",
+        "width": 1024,
+        "height": 1024,
+        "fullSize": "passed",
+        "halfSize": "passed",
+        "sha256": "c1d2d1a6312fd0817ceb24a15f8a6cdc0669f46707a8d882739258678abc2a95"
+      },
+      {
+        "file": "social-post.png",
+        "width": 1080,
+        "height": 1080,
+        "fullSize": "passed",
+        "halfSize": "passed",
+        "sha256": "3ec1a01dba411f4d260ad27f0a6c6fe21afa40d00678cfe1f84201d0711ece8d"
+      },
+      {
+        "file": "vertical-story.png",
+        "width": 1080,
+        "height": 1920,
+        "fullSize": "passed",
+        "halfSize": "passed",
+        "sha256": "9c60a400034fa9ba81feec1e8086df5c187061d4a9530867ef3233fb1c781389"
+      },
+      {
+        "file": "counter-card.png",
+        "width": 1240,
+        "height": 1748,
+        "fullSize": "passed",
+        "halfSize": "passed",
+        "sha256": "597d9efd67c0f444827aff1b94e839c55eb70c8963f3d439dd2a6a065169c252"
+      }
+    ],
+    "pdf": {
+      "file": "counter-card.pdf",
+      "widthMm": 105,
+      "heightMm": 148,
+      "embeds": "counter-card.png",
+      "separatelyDecoded": false
+    },
+    "proof": {
+      "file": "campaign-proof.pdf",
+      "purpose": "Visual review only; not final print size",
+      "separatelyDecoded": false
+    },
+    "limitation": "Reference image checks only. Test physical prints and published social images. Destination availability was not checked."
+  },
+  "physicalPhoneTest": false
+}

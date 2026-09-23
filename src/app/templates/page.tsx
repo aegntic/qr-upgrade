@@ -3,6 +3,7 @@ import { ArrowUpRight } from "lucide-react";
 import { artworkDesigns } from "@/lib/artwork-designs";
 export const metadata = {
   title: "QR image gallery",
+  description: "Explore QR artwork directions, choose a starting image and weave in your own destination using QR Upgrade’s scan-checked editor.",
   alternates: { canonical: "/templates" },
 };
 export default function Templates() {

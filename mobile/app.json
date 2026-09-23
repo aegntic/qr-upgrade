@@ -24,7 +24,8 @@
       "allowBackup": false,
       "permissions": [
         "android.permission.CAMERA"
-      ]
+      ],
+      "versionCode": 2
     },
     "web": {
       "bundler": "metro",

@@ -11,7 +11,11 @@ export async function serviceFetch(config: ServiceConfig, path: string, init: Re
   const headers = new Headers(init.headers);
   headers.set('Authorization', `Bearer ${config.secret}`);
   const options = { ...init, headers, cache: 'no-store' as const };
-  const fetcher = injectedFetch || (binding ? binding.fetch.bind(binding) : fetch);
+  // Local Next + OpenNext-for-dev injects a QR_SERVICE binding that expects
+  // `wrangler dev` for qr-upgrade-service. When QR_SERVICE_URL is a real HTTPS
+  // endpoint, use plain fetch so smoke can hit workers.dev without a local Worker.
+  const preferRemote = typeof config.serviceUrl === 'string' && /^https:\/\//i.test(config.serviceUrl) && !config.serviceUrl.includes('qr-service.internal');
+  const fetcher = injectedFetch || (binding && !preferRemote ? binding.fetch.bind(binding) : fetch);
   const signal = init.signal;
   signal?.throwIfAborted();
   // Binding fetch does not promise Node's cancellation behavior. Preserve the

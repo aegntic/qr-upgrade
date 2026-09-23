@@ -1,6 +1,7 @@
 import { faqs, sources } from "@/lib/facts";
 export const metadata = {
   title: "Verified product facts",
+  description: "Current QR Upgrade capabilities: artwork generation, scan checks, local saving, campaign exports and account features, with clear product limitations.",
   alternates: { canonical: "/ai" },
 };
 export default function AI() {

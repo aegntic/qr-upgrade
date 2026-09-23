@@ -1,0 +1,52 @@
+[
+  {
+    "format": "landscape",
+    "frameAtSeconds": 26,
+    "trials": [
+      {
+        "width": 1920,
+        "height": 1080,
+        "decoded": "https://qrupgrade.com/"
+      },
+      {
+        "width": 768,
+        "height": 432,
+        "decoded": "https://qrupgrade.com/"
+      },
+      {
+        "width": 540,
+        "height": 304,
+        "decoded": "https://qrupgrade.com/"
+      }
+    ],
+    "engine": "QRUpgrade shared decodePixels; jsQR at bounded sampling scales",
+    "physicalPhoneTest": false,
+    "socialUploadTest": false,
+    "note": "Raw unscaled jsQR misses the high-resolution frame. The app decoder samples at bounded scales and passes full and resized input frames. This is a single-engine reference check."
+  },
+  {
+    "format": "portrait",
+    "frameAtSeconds": 26,
+    "trials": [
+      {
+        "width": 1080,
+        "height": 1920,
+        "decoded": "https://qrupgrade.com/"
+      },
+      {
+        "width": 768,
+        "height": 1365,
+        "decoded": "https://qrupgrade.com/"
+      },
+      {
+        "width": 540,
+        "height": 960,
+        "decoded": "https://qrupgrade.com/"
+      }
+    ],
+    "engine": "QRUpgrade shared decodePixels; jsQR at bounded sampling scales",
+    "physicalPhoneTest": false,
+    "socialUploadTest": false,
+    "note": "Raw unscaled jsQR misses the high-resolution frame. The app decoder samples at bounded scales and passes full and resized input frames. This is a single-engine reference check."
+  }
+]

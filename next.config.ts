@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 import { securityHeaders } from "./src/lib/security/headers";
 const config: NextConfig = {
   poweredByHeader: false,
+  // Keep discovery metadata in the initial head for simple crawlers and link previews.
+  // Public metadata is local; there is no remote marketing lookup to wait for.
+  htmlLimitedBots: /.*/,
   async headers() {
     return [
       {

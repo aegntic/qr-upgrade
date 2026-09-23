@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start --hostname 0.0.0.0 --port 3017",
     "typecheck": "tsc --noEmit",
+    "marketing:check": "node scripts/marketing/watch.mjs",
     "test": "tsx --test tests/*.test.ts",
     "security:evidence": "node scripts/security/collect.mjs",
     "compliance:release": "node scripts/security/release.mjs",
@@ -16,9 +17,11 @@
     "cf:upload": "opennextjs-cloudflare upload",
     "cf:dry-run": "wrangler deploy --dry-run",
     "cf:typegen": "wrangler types --env-interface CloudflareEnv --include-runtime=false cloudflare-env.d.ts",
-    "security:cloudflare": "node scripts/security/cloudflare-check.mjs"
+    "security:cloudflare": "node scripts/security/cloudflare-check.mjs",
+    "higgsfield:example": "tsx examples/higgsfield/index.ts"
   },
   "dependencies": {
+    "@higgsfield/client": "0.2.6",
     "fflate": "0.8.3",
     "jose": "6.2.12",
     "jspdf": "4.2.1",

@@ -1,24 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 const pages = {
-  dynamic: {
-    title: "One code. Room to change.",
-    label: "DYNAMIC DESTINATIONS / PLANNED",
-    body: "Dynamic redirects, geographic and language routing, and campaign analytics are planned. This preview creates static QR codes: your destination is encoded directly. Use a URL you control if you need to change its content later.",
-  },
   "brand-kits": {
     title: "A home for your brand.",
     label: "BRAND KITS / PLANNED",
-    body: "Saved artwork directions, team workspaces, and reusable brand kits are planned. In this preview you can turn your own image into QR artwork locally. Your draft is not stored after you leave.",
-  },
-  pricing: {
-    title: "Start with the work.",
-    label: "PRICING / PREVIEW",
-    body: "The current browser preview is free to use without an account. The proposed Pro plan at US$12/month and Brand plan at US$25/month are planning targets, not active offers. Billing, paid subscriptions, teams, and API entitlements are not connected.",
+    description: "Save QR designs in your browser and export a coordinated campaign kit. Learn what is available now and what is planned for reusable brand kits.",
+    body: "Create QR artwork from your own imagery, then use Save design to keep an explicit copy in this browser. My designs lets you reopen, rename, duplicate and archive it. Cloud saving is a separate account action. Campaign kits turn a checked design into social and print layouts today; reusable brand presets and team workspaces remain planned. Clearing site data removes browser-local saves.",
   },
   blog: {
     title: "The space around the square.",
     label: "FIELD NOTES / PRINT BASICS",
+    description: "Plan a clear QR quiet zone and test the final print size, viewing distance and material before producing posters, packaging or counter cards.",
     body: "A QR needs a clear border called a quiet zone. DENSO WAVE specifies four modules around a standard QR code. Keep that space free of text, imagery, and trim edges. Then check the code at its actual printed size, from the intended distance, on the final material. A beautiful screen preview cannot tell you how glare, a crease, or a curved bottle will affect a camera.",
   },
 };
@@ -31,7 +23,7 @@ export async function generateMetadata({
   const { info } = await params;
   if (!Object.hasOwn(pages, info)) notFound();
   const page = pages[info as keyof typeof pages];
-  return { title: page?.title, alternates: { canonical: "/" + info } };
+  return { title: page.title, description: page.description, alternates: { canonical: "/" + info } };
 }
 export default async function InfoPage({
   params,

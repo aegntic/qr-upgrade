@@ -10,11 +10,26 @@ const JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/ce
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 export const MAX_CLOUD_BYTES = 3 * 1024 * 1024;
 export type Account = { id: string; name: string; email: string; version: number };
-export type AccountConfig = { clientId?: string; clientSecret?: string; secret?: string; serviceUrl?: string; development: boolean };
+export type AccountConfig = { clientId?: string; clientSecret?: string; secret?: string; serviceUrl?: string; development: boolean; accountOrigin?: string };
 export type EntitlementOptions={config?:BillingConfig;deps?:BillingDeps;accountDeps?:AccountDeps};
-export function accountConfig(): AccountConfig { return {clientId:runtimeVariable('GOOGLE_CLIENT_ID'),clientSecret:runtimeVariable('GOOGLE_CLIENT_SECRET'),secret:runtimeVariable('QR_SERVICE_SECRET'),serviceUrl:runtimeVariable('QR_SERVICE_URL'),development:process.env.NODE_ENV==='development'}; }
+// Exact allowlist only (same pattern as QR_ART_ORIGIN). Never accept arbitrary ACCOUNT_ORIGIN values.
+const ACCOUNT_ORIGINS = new Set(['https://qrupgrade.com','https://qr-upgrade-web.aegntic.workers.dev']);
+export function accountConfig(): AccountConfig {
+  const accountOrigin=runtimeVariable('ACCOUNT_ORIGIN');
+  return {
+    clientId:runtimeVariable('GOOGLE_CLIENT_ID'),
+    clientSecret:runtimeVariable('GOOGLE_CLIENT_SECRET'),
+    secret:runtimeVariable('QR_SERVICE_SECRET'),
+    serviceUrl:runtimeVariable('QR_SERVICE_URL'),
+    development:process.env.NODE_ENV==='development',
+    accountOrigin:accountOrigin&&ACCOUNT_ORIGINS.has(accountOrigin)?accountOrigin:undefined,
+  };
+}
 export function configured(c=accountConfig()) { return !!(c.clientId&&c.clientSecret&&serviceAvailable(c)); }
-export function accountOrigin(c=accountConfig()) { return c.development?'http://localhost:3040':'https://qrupgrade.com'; }
+export function accountOrigin(c=accountConfig()) {
+  if(c.development)return 'http://localhost:3040';
+  return c.accountOrigin??'https://qrupgrade.com';
+}
 export function accountSameOrigin(r:Request,c=accountConfig()) { return r.headers.get('origin')===accountOrigin(c)&&r.headers.get('sec-fetch-site')!=='cross-site'; }
 export function accountReply(body:unknown,status=200) { return Response.json(body,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}}); }
 function key(c:AccountConfig,purpose:string) { if(!c.secret||c.secret.length<32)throw new Error('Not configured');return createHmac('sha256',c.secret).update(`qr-upgrade:account:${purpose}:v1`).digest(); }
@@ -38,8 +53,9 @@ async function securityService(path:string,owner:string,c:AccountConfig,deps:Acc
  throw new Error('Invalid session denial');
  }
  if(result.status===409&&path==='sign-in'){const denial=await result.json();if(denial&&typeof denial==='object'&&!Array.isArray(denial)&&Object.keys(denial).length===2&&denial.code==='account_closed'&&denial.owner===owner)throw new AccountClosed();}
- if(!result.ok)throw new Error();return await result.json();
- }catch(error){if(error instanceof AccountClosed)throw error;throw new AccountUnavailable('Account security unavailable');}
+ if(!result.ok){const text=await result.text().catch(()=> '');console.error('[account-security-http]', path, result.status, text.slice(0,300));throw new Error('service '+result.status);}
+ return await result.json();
+ }catch(error){if(error instanceof AccountClosed)throw error;console.error('[account-security]', path, owner.slice(0,8), error instanceof Error?error.message:error);throw new AccountUnavailable('Account security unavailable');}
 }
 async function signedSession(r:Request,c:AccountConfig){
  if(!configured(c))return null;
@@ -94,13 +110,13 @@ export async function login(r:Request,c=accountConfig()) {
 export async function callback(r:Request,c=accountConfig(),deps:CallbackDeps={}) {
  const response=redirect(c);response.headers.append('Set-Cookie',cookie(c,'oauth','',0));
  try {
-  if(!configured(c)||new URL(r.url).origin!==accountOrigin(c))throw new Error();const q=new URL(r.url).searchParams,token=readCookie(r,c,'oauth');if(!token||token.length>4096||q.has('error'))throw new Error();
-  const p=await verifyToken(token,'oauth',c),state=q.get('state'),code=q.get('code');
-  if(typeof p.state!=='string'||typeof p.nonce!=='string'||typeof p.verifier!=='string'||!state||state.length!==p.state.length||!timingSafeEqual(Buffer.from(state),Buffer.from(p.state))||!code||code.length>4096)throw new Error();
+  const reqOrigin=new URL(r.url).origin; if(!configured(c))throw new Error('not_configured'); if(reqOrigin!==accountOrigin(c))throw new Error('origin_mismatch:'+reqOrigin+'!='+accountOrigin(c)); const q=new URL(r.url).searchParams,token=readCookie(r,c,'oauth'); if(q.has('error'))throw new Error('google_error:'+q.get('error')); if(!token||token.length>4096)throw new Error('missing_oauth_cookie');
+  let p; try{p=await verifyToken(token,'oauth',c);}catch(e){throw new Error('oauth_cookie_invalid');} const state=q.get('state'),code=q.get('code');
+  if(typeof p.state!=='string'||typeof p.nonce!=='string'||typeof p.verifier!=='string'||!state||state.length!==p.state.length||!timingSafeEqual(Buffer.from(state),Buffer.from(p.state))||!code||code.length>4096)throw new Error('state_or_code_mismatch');
   const exchange=await(deps.fetch||fetch)('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:c.clientId!,client_secret:c.clientSecret!,redirect_uri:`${accountOrigin(c)}/api/account/callback`,grant_type:'authorization_code',code,code_verifier:p.verifier}),signal:AbortSignal.timeout(10000),cache:'no-store'});
-  if(!exchange.ok)throw new Error();const tokens=await exchange.json();if(typeof tokens.id_token!=='string')throw new Error();
-  const payload=deps.verifyGoogleToken?await deps.verifyGoogleToken(tokens.id_token,c):(await jwtVerify(tokens.id_token,JWKS,{algorithms:['RS256'],issuer:['https://accounts.google.com','accounts.google.com'],audience:c.clientId!,requiredClaims:['sub','exp','iat','nonce','email','email_verified']})).payload;
-  if(payload.nonce!==p.nonce||payload.email_verified!==true||!payload.sub||payload.sub.length>255||typeof payload.email!=='string'||payload.email.length>254||(payload.azp!==undefined&&payload.azp!==c.clientId))throw new Error();
+  if(!exchange.ok){const t=await exchange.text().catch(()=> '');throw new Error('token_exchange:'+exchange.status+':'+t.slice(0,200));} const tokens=await exchange.json(); if(typeof tokens.id_token!=='string')throw new Error('no_id_token');
+  let payload; try{payload=deps.verifyGoogleToken?await deps.verifyGoogleToken(tokens.id_token,c):(await jwtVerify(tokens.id_token,JWKS,{algorithms:['RS256'],issuer:['https://accounts.google.com','accounts.google.com'],audience:c.clientId!,requiredClaims:['sub','exp','iat','nonce','email','email_verified']})).payload;}catch(e){throw new Error('id_token_verify:'+(e instanceof Error?e.message:e));}
+  if(payload.nonce!==p.nonce)throw new Error('nonce_mismatch'); if(payload.email_verified!==true)throw new Error('email_unverified'); if(!payload.sub||payload.sub.length>255||typeof payload.email!=='string'||payload.email.length>254||(payload.azp!==undefined&&payload.azp!==c.clientId))throw new Error('claims_invalid');
   const user={sub:createHash('sha256').update(`google:${payload.sub}`).digest('hex'),email:payload.email,name:typeof payload.name==='string'?payload.name.slice(0,120):'Your account'};
   if(p.action!==undefined){
    if(p.action!=='delete')throw new Error();
@@ -110,7 +126,7 @@ export async function callback(r:Request,c=accountConfig(),deps:CallbackDeps={})
   const security=await securityService('sign-in',user.sub,c,deps,{});if(!security||security.owner!==user.sub||!Number.isSafeInteger(security.version)||security.version<1)throw new AccountUnavailable();
   response.headers.append('Set-Cookie',cookie(c,'session',await signAccountToken({...user,sv:security.version},'session',c),604800));
   response.headers.append('Set-Cookie',cookie(c,'deletion-intent','',0));response.headers.append('Set-Cookie',cookie(c,'deletion-status','',0));
- } catch(error) { response.headers.set('Location',`${accountOrigin(c)}/account?error=${error instanceof AccountClosed?'closed':error instanceof AccountUnavailable?'unavailable':'signin'}`); }
+ } catch(error) { console.error('[account-callback]', error instanceof Error?error.name+':'+error.message:error, error instanceof Error?error.stack?.split('\n').slice(0,4).join(' | '):''); response.headers.set('Location',`${accountOrigin(c)}/account?error=${error instanceof AccountClosed?'closed':error instanceof AccountUnavailable?'unavailable':'signin'}`); }
  return response;
 }
 export function logout(r:Request,c=accountConfig()) { if(!accountSameOrigin(r,c))return accountReply({error:'Open your account to sign out.'},403);const response=accountReply({signedIn:false});response.headers.append('Set-Cookie',cookie(c,'session','',0));response.headers.append('Set-Cookie',cookie(c,'oauth','',0));return response; }

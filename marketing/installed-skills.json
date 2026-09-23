@@ -1,0 +1,556 @@
+{
+  "installedAt": "2026-09-21",
+  "skills": [
+    {
+      "folder": "seo-god",
+      "name": "seo-god",
+      "repo": "AKCodez/seo-god",
+      "ref": "fa7b2c9c2540d4510e9494e91f2d825086e60f8f",
+      "path": ".",
+      "claude_path": "/home/ae/.claude/skills/seo-god"
+    },
+    {
+      "folder": "promo-video",
+      "name": "promo-video",
+      "repo": "AKCodez/promo-video-skill",
+      "ref": "e0f8d78a0cc9ed8c0789c585e46c12fec704c86b",
+      "path": "skills/promo-video",
+      "claude_path": "/home/ae/.claude/skills/promo-video",
+      "local_adaptation": "Redacted API key fragments in preflight diagnostics."
+    },
+    {
+      "folder": "01-cinematic",
+      "name": "seedance-cinematic",
+      "repo": "AKCodez/higgsfield-claude-skills",
+      "ref": "f6698ab7a87223b67a76ce748ca1b936a8b5d399",
+      "path": "01-cinematic",
+      "claude_path": "/home/ae/.claude/skills/01-cinematic"
+    },
+    {
+      "folder": "02-3d-cgi",
+      "name": "seedance-3d-cgi",
+      "repo": "AKCodez/higgsfield-claude-skills",
+      "ref": "f6698ab7a87223b67a76ce748ca1b936a8b5d399",
+      "path": "02-3d-cgi",
+      "claude_path": "/home/ae/.claude/skills/02-3d-cgi"
+    },
+    {
+      "folder": "03-cartoon",
+      "name": "seedance-cartoon",
+      "repo": "AKCodez/higgsfield-claude-skills",
+      "ref": "f6698ab7a87223b67a76ce748ca1b936a8b5d399",
+      "path": "03-cartoon",
+      "claude_path": "/home/ae/.claude/skills/03-cartoon"
+    },
+    {
+      "folder": "04-comic-to-video",
+      "name": "seedance-comic-to-video",
+      "repo": "AKCodez/higgsfield-claude-skills",
+      "ref": "f6698ab7a87223b67a76ce748ca1b936a8b5d399",
+      "path": "04-comic-to-video",
+      "claude_path": "/home/ae/.claude/skills/04-comic-to-video"
+    },
+    {
+      "folder": "05-fight-scenes",
+      "name": "seedance-fight-scenes",
+      "repo": "AKCodez/higgsfield-claude-skills",
+      "ref": "f6698ab7a87223b67a76ce748ca1b936a8b5d399",
+      "path": "05-fight-scenes",
+      "claude_path": "/home/ae/.claude/skills/05-fight-scenes"
+    },
+    {
+      "folder": "06-motion-design-ad",
+      "name": "seedance-motion-design-ad",
+      "repo": "AKCodez/higgsfield-claude-skills",
+      "ref": "f6698ab7a87223b67a76ce748ca1b936a8b5d399",
+      "path": "06-motion-design-ad",
+      "claude_path": "/home/ae/.claude/skills/06-motion-design-ad"
+    },
+    {
+      "folder": "07-ecommerce-ad",
+      "name": "seedance-ecommerce-ad",
+      "repo": "AKCodez/higgsfield-claude-skills",
+      "ref": "f6698ab7a87223b67a76ce748ca1b936a8b5d399",
+      "path": "07-ecommerce-ad",
+      "claude_path": "/home/ae/.claude/skills/07-ecommerce-ad"
+    },
+    {
+      "folder": "08-anime-action",
+      "name": "seedance-anime-action",
+      "repo": "AKCodez/higgsfield-claude-skills",
+      "ref": "f6698ab7a87223b67a76ce748ca1b936a8b5d399",
+      "path": "08-anime-action",
+      "claude_path": "/home/ae/.claude/skills/08-anime-action"
+    },
+    {
+      "folder": "09-product-360",
+      "name": "seedance-product-360",
+      "repo": "AKCodez/higgsfield-claude-skills",
+      "ref": "f6698ab7a87223b67a76ce748ca1b936a8b5d399",
+      "path": "09-product-360",
+      "claude_path": "/home/ae/.claude/skills/09-product-360"
+    },
+    {
+      "folder": "10-music-video",
+      "name": "seedance-music-video",
+      "repo": "AKCodez/higgsfield-claude-skills",
+      "ref": "f6698ab7a87223b67a76ce748ca1b936a8b5d399",
+      "path": "10-music-video",
+      "claude_path": "/home/ae/.claude/skills/10-music-video"
+    },
+    {
+      "folder": "11-social-hook",
+      "name": "seedance-social-hook",
+      "repo": "AKCodez/higgsfield-claude-skills",
+      "ref": "f6698ab7a87223b67a76ce748ca1b936a8b5d399",
+      "path": "11-social-hook",
+      "claude_path": "/home/ae/.claude/skills/11-social-hook"
+    },
+    {
+      "folder": "12-brand-story",
+      "name": "seedance-brand-story",
+      "repo": "AKCodez/higgsfield-claude-skills",
+      "ref": "f6698ab7a87223b67a76ce748ca1b936a8b5d399",
+      "path": "12-brand-story",
+      "claude_path": "/home/ae/.claude/skills/12-brand-story"
+    },
+    {
+      "folder": "13-fashion-lookbook",
+      "name": "seedance-fashion-lookbook",
+      "repo": "AKCodez/higgsfield-claude-skills",
+      "ref": "f6698ab7a87223b67a76ce748ca1b936a8b5d399",
+      "path": "13-fashion-lookbook",
+      "claude_path": "/home/ae/.claude/skills/13-fashion-lookbook"
+    },
+    {
+      "folder": "14-food-beverage",
+      "name": "seedance-food-beverage",
+      "repo": "AKCodez/higgsfield-claude-skills",
+      "ref": "f6698ab7a87223b67a76ce748ca1b936a8b5d399",
+      "path": "14-food-beverage",
+      "claude_path": "/home/ae/.claude/skills/14-food-beverage"
+    },
+    {
+      "folder": "15-real-estate",
+      "name": "seedance-real-estate",
+      "repo": "AKCodez/higgsfield-claude-skills",
+      "ref": "f6698ab7a87223b67a76ce748ca1b936a8b5d399",
+      "path": "15-real-estate",
+      "claude_path": "/home/ae/.claude/skills/15-real-estate"
+    },
+    {
+      "folder": "higgsfield-image-auto",
+      "name": "higgsfield-image-auto",
+      "repo": "AKCodez/higgsfield-claude-skills",
+      "ref": "f6698ab7a87223b67a76ce748ca1b936a8b5d399",
+      "path": "higgsfield-image-auto",
+      "claude_path": "/home/ae/.claude/skills/higgsfield-image-auto"
+    },
+    {
+      "folder": "seedance-auto-generate",
+      "name": "seedance-auto-generate",
+      "repo": "AKCodez/higgsfield-claude-skills",
+      "ref": "f6698ab7a87223b67a76ce748ca1b936a8b5d399",
+      "path": "seedance-auto-generate",
+      "claude_path": "/home/ae/.claude/skills/seedance-auto-generate"
+    },
+    {
+      "folder": "ugc-hot-girl",
+      "name": "ugc-hot-girl",
+      "repo": "AKCodez/higgsfield-claude-skills",
+      "ref": "f6698ab7a87223b67a76ce748ca1b936a8b5d399",
+      "path": "ugc-hot-girl",
+      "claude_path": "/home/ae/.claude/skills/ugc-hot-girl"
+    },
+    {
+      "folder": "ugc-video-auto",
+      "name": "ugc-video-auto",
+      "repo": "AKCodez/higgsfield-claude-skills",
+      "ref": "f6698ab7a87223b67a76ce748ca1b936a8b5d399",
+      "path": "ugc-video-auto",
+      "claude_path": "/home/ae/.claude/skills/ugc-video-auto"
+    },
+    {
+      "folder": "product-marketing",
+      "name": "product-marketing",
+      "repo": "coreyhaines31/marketingskills",
+      "ref": "5b2c0007766c6a1cf1d53fd8fc73e979e0821022",
+      "path": "skills/product-marketing",
+      "claude_path": "/home/ae/.claude/skills/product-marketing"
+    },
+    {
+      "folder": "marketing-loops",
+      "name": "marketing-loops",
+      "repo": "coreyhaines31/marketingskills",
+      "ref": "5b2c0007766c6a1cf1d53fd8fc73e979e0821022",
+      "path": "skills/marketing-loops",
+      "claude_path": "/home/ae/.claude/skills/marketing-loops"
+    },
+    {
+      "folder": "ai-seo",
+      "name": "ai-seo",
+      "repo": "coreyhaines31/marketingskills",
+      "ref": "5b2c0007766c6a1cf1d53fd8fc73e979e0821022",
+      "path": "skills/ai-seo",
+      "claude_path": "/home/ae/.claude/skills/ai-seo"
+    },
+    {
+      "folder": "programmatic-seo",
+      "name": "programmatic-seo",
+      "repo": "coreyhaines31/marketingskills",
+      "ref": "5b2c0007766c6a1cf1d53fd8fc73e979e0821022",
+      "path": "skills/programmatic-seo",
+      "claude_path": "/home/ae/.claude/skills/programmatic-seo"
+    },
+    {
+      "folder": "free-tools",
+      "name": "free-tools",
+      "repo": "coreyhaines31/marketingskills",
+      "ref": "5b2c0007766c6a1cf1d53fd8fc73e979e0821022",
+      "path": "skills/free-tools",
+      "claude_path": "/home/ae/.claude/skills/free-tools"
+    },
+    {
+      "folder": "aso",
+      "name": "aso",
+      "repo": "coreyhaines31/marketingskills",
+      "ref": "5b2c0007766c6a1cf1d53fd8fc73e979e0821022",
+      "path": "skills/aso",
+      "claude_path": "/home/ae/.claude/skills/aso"
+    },
+    {
+      "folder": "launch",
+      "name": "launch",
+      "repo": "coreyhaines31/marketingskills",
+      "ref": "5b2c0007766c6a1cf1d53fd8fc73e979e0821022",
+      "path": "skills/launch",
+      "claude_path": "/home/ae/.claude/skills/launch"
+    },
+    {
+      "folder": "influencer-marketing",
+      "name": "influencer-marketing",
+      "repo": "coreyhaines31/marketingskills",
+      "ref": "5b2c0007766c6a1cf1d53fd8fc73e979e0821022",
+      "path": "skills/influencer-marketing",
+      "claude_path": "/home/ae/.claude/skills/influencer-marketing"
+    },
+    {
+      "folder": "co-marketing",
+      "name": "co-marketing",
+      "repo": "coreyhaines31/marketingskills",
+      "ref": "5b2c0007766c6a1cf1d53fd8fc73e979e0821022",
+      "path": "skills/co-marketing",
+      "claude_path": "/home/ae/.claude/skills/co-marketing"
+    },
+    {
+      "folder": "social",
+      "name": "social",
+      "repo": "coreyhaines31/marketingskills",
+      "ref": "5b2c0007766c6a1cf1d53fd8fc73e979e0821022",
+      "path": "skills/social",
+      "claude_path": "/home/ae/.claude/skills/social"
+    },
+    {
+      "folder": "video",
+      "name": "video",
+      "repo": "coreyhaines31/marketingskills",
+      "ref": "5b2c0007766c6a1cf1d53fd8fc73e979e0821022",
+      "path": "skills/video",
+      "claude_path": "/home/ae/.claude/skills/video"
+    },
+    {
+      "folder": "copywriting",
+      "name": "copywriting",
+      "repo": "coreyhaines31/marketingskills",
+      "ref": "5b2c0007766c6a1cf1d53fd8fc73e979e0821022",
+      "path": "skills/copywriting",
+      "claude_path": "/home/ae/.claude/skills/copywriting"
+    },
+    {
+      "folder": "analytics",
+      "name": "analytics",
+      "repo": "coreyhaines31/marketingskills",
+      "ref": "5b2c0007766c6a1cf1d53fd8fc73e979e0821022",
+      "path": "skills/analytics",
+      "claude_path": "/home/ae/.claude/skills/analytics"
+    },
+    {
+      "folder": "public-relations",
+      "name": "public-relations",
+      "repo": "coreyhaines31/marketingskills",
+      "ref": "5b2c0007766c6a1cf1d53fd8fc73e979e0821022",
+      "path": "skills/public-relations",
+      "claude_path": "/home/ae/.claude/skills/public-relations"
+    },
+    {
+      "folder": "referrals",
+      "name": "referrals",
+      "repo": "coreyhaines31/marketingskills",
+      "ref": "5b2c0007766c6a1cf1d53fd8fc73e979e0821022",
+      "path": "skills/referrals",
+      "claude_path": "/home/ae/.claude/skills/referrals"
+    },
+    {
+      "folder": "ab-testing",
+      "name": "ab-testing",
+      "repo": "coreyhaines31/marketingskills",
+      "ref": "5b2c0007766c6a1cf1d53fd8fc73e979e0821022",
+      "path": "skills/ab-testing",
+      "claude_path": "/home/ae/.claude/skills/ab-testing"
+    },
+    {
+      "folder": "seo",
+      "name": "seo",
+      "repo": "AgriciDaniel/claude-seo",
+      "ref": "92795530b4cc92c6bf7a2435b82c15b003e71181",
+      "path": "skills/seo",
+      "local_adaptation": "Resolved Claude plugin root to the installed source/runtime for Codex use.",
+      "claude_path": "/home/ae/.claude/skills/seo"
+    },
+    {
+      "folder": "seo-audit",
+      "name": "seo-audit",
+      "repo": "AgriciDaniel/claude-seo",
+      "ref": "92795530b4cc92c6bf7a2435b82c15b003e71181",
+      "path": "skills/seo-audit",
+      "local_adaptation": "Resolved Claude plugin root to the installed source/runtime for Codex use.",
+      "claude_path": "/home/ae/.claude/skills/seo-audit"
+    },
+    {
+      "folder": "seo-technical",
+      "name": "seo-technical",
+      "repo": "AgriciDaniel/claude-seo",
+      "ref": "92795530b4cc92c6bf7a2435b82c15b003e71181",
+      "path": "skills/seo-technical",
+      "local_adaptation": "Resolved Claude plugin root to the installed source/runtime for Codex use.",
+      "claude_path": "/home/ae/.claude/skills/seo-technical"
+    },
+    {
+      "folder": "seo-images",
+      "name": "seo-images",
+      "repo": "AgriciDaniel/claude-seo",
+      "ref": "92795530b4cc92c6bf7a2435b82c15b003e71181",
+      "path": "skills/seo-images",
+      "local_adaptation": "Resolved Claude plugin root to the installed source/runtime for Codex use.",
+      "claude_path": "/home/ae/.claude/skills/seo-images"
+    },
+    {
+      "folder": "seo-hreflang",
+      "name": "seo-hreflang",
+      "repo": "AgriciDaniel/claude-seo",
+      "ref": "92795530b4cc92c6bf7a2435b82c15b003e71181",
+      "path": "skills/seo-hreflang",
+      "local_adaptation": "Resolved Claude plugin root to the installed source/runtime for Codex use.",
+      "claude_path": "/home/ae/.claude/skills/seo-hreflang"
+    },
+    {
+      "folder": "seo-content-brief",
+      "name": "seo-content-brief",
+      "repo": "AgriciDaniel/claude-seo",
+      "ref": "92795530b4cc92c6bf7a2435b82c15b003e71181",
+      "path": "skills/seo-content-brief",
+      "local_adaptation": "Resolved Claude plugin root to the installed source/runtime for Codex use.",
+      "claude_path": "/home/ae/.claude/skills/seo-content-brief"
+    },
+    {
+      "folder": "seo-schema",
+      "name": "seo-schema",
+      "repo": "AgriciDaniel/claude-seo",
+      "ref": "92795530b4cc92c6bf7a2435b82c15b003e71181",
+      "path": "skills/seo-schema",
+      "local_adaptation": "Resolved Claude plugin root to the installed source/runtime for Codex use.",
+      "claude_path": "/home/ae/.claude/skills/seo-schema"
+    },
+    {
+      "folder": "seo-sitemap",
+      "name": "seo-sitemap",
+      "repo": "AgriciDaniel/claude-seo",
+      "ref": "92795530b4cc92c6bf7a2435b82c15b003e71181",
+      "path": "skills/seo-sitemap",
+      "local_adaptation": "Resolved Claude plugin root to the installed source/runtime for Codex use.",
+      "claude_path": "/home/ae/.claude/skills/seo-sitemap"
+    },
+    {
+      "folder": "seo-drift",
+      "name": "seo-drift",
+      "repo": "AgriciDaniel/claude-seo",
+      "ref": "92795530b4cc92c6bf7a2435b82c15b003e71181",
+      "path": "skills/seo-drift",
+      "local_adaptation": "Resolved Claude plugin root to the installed source/runtime for Codex use.",
+      "claude_path": "/home/ae/.claude/skills/seo-drift"
+    },
+    {
+      "folder": "seo-google",
+      "name": "seo-google",
+      "repo": "AgriciDaniel/claude-seo",
+      "ref": "92795530b4cc92c6bf7a2435b82c15b003e71181",
+      "path": "skills/seo-google",
+      "local_adaptation": "Resolved Claude plugin root to the installed source/runtime for Codex use.",
+      "claude_path": "/home/ae/.claude/skills/seo-google"
+    },
+    {
+      "folder": "seo-engine",
+      "name": "seo-engine",
+      "repo": "iannuttall/seo",
+      "ref": "52f10012021131c2405cddfb976d583a6af3b490",
+      "path": "skills/seo",
+      "local_adaptation": "Unique Codex skill name; upstream content otherwise preserved.",
+      "claude_path": "/home/ae/.claude/skills/seo-engine"
+    },
+    {
+      "folder": "news-search",
+      "name": "news-search",
+      "repo": "elvisun/newsjack",
+      "ref": "092d882fc69912622f620c50eb493afe625f99dc",
+      "path": "skills/news-search",
+      "claude_path": "/home/ae/.claude/skills/news-search"
+    },
+    {
+      "folder": "newsworthiness-check",
+      "name": "newsworthiness-check",
+      "repo": "elvisun/newsjack",
+      "ref": "092d882fc69912622f620c50eb493afe625f99dc",
+      "path": "skills/newsworthiness-check",
+      "claude_path": "/home/ae/.claude/skills/newsworthiness-check"
+    },
+    {
+      "folder": "find-journalists",
+      "name": "find-journalists",
+      "repo": "elvisun/newsjack",
+      "ref": "092d882fc69912622f620c50eb493afe625f99dc",
+      "path": "skills/find-journalists",
+      "claude_path": "/home/ae/.claude/skills/find-journalists"
+    },
+    {
+      "folder": "journalist-fit-check",
+      "name": "journalist-fit-check",
+      "repo": "elvisun/newsjack",
+      "ref": "092d882fc69912622f620c50eb493afe625f99dc",
+      "path": "skills/journalist-fit-check",
+      "claude_path": "/home/ae/.claude/skills/journalist-fit-check"
+    },
+    {
+      "folder": "angle-generator",
+      "name": "angle-generator",
+      "repo": "elvisun/newsjack",
+      "ref": "092d882fc69912622f620c50eb493afe625f99dc",
+      "path": "skills/angle-generator",
+      "claude_path": "/home/ae/.claude/skills/angle-generator"
+    },
+    {
+      "folder": "fact-check",
+      "name": "fact-check",
+      "repo": "elvisun/newsjack",
+      "ref": "092d882fc69912622f620c50eb493afe625f99dc",
+      "path": "skills/fact-check",
+      "claude_path": "/home/ae/.claude/skills/fact-check"
+    },
+    {
+      "folder": "coverage-tracker",
+      "name": "coverage-tracker",
+      "repo": "elvisun/newsjack",
+      "ref": "092d882fc69912622f620c50eb493afe625f99dc",
+      "path": "skills/coverage-tracker",
+      "claude_path": "/home/ae/.claude/skills/coverage-tracker"
+    },
+    {
+      "folder": "pr-calendar",
+      "name": "pr-calendar",
+      "repo": "elvisun/newsjack",
+      "ref": "092d882fc69912622f620c50eb493afe625f99dc",
+      "path": "skills/pr-calendar",
+      "claude_path": "/home/ae/.claude/skills/pr-calendar"
+    },
+    {
+      "folder": "video-content-engine",
+      "name": "video-content-engine",
+      "repo": "ericosiu/ai-marketing-skills",
+      "ref": "bc84dbc0c3e453fe9b0c1c7a5f95d8da223289c6",
+      "path": "video-content-engine",
+      "claude_path": "/home/ae/.claude/skills/video-content-engine"
+    },
+    {
+      "folder": "short-form-pipeline",
+      "name": "short-form-pipeline",
+      "repo": "ericosiu/ai-marketing-skills",
+      "ref": "bc84dbc0c3e453fe9b0c1c7a5f95d8da223289c6",
+      "path": "short-form-pipeline",
+      "local_adaptation": "Added required Codex name/description frontmatter to upstream Markdown.",
+      "claude_path": "/home/ae/.claude/skills/short-form-pipeline"
+    },
+    {
+      "folder": "video-caption-generator",
+      "name": "video-caption-generator",
+      "repo": "ericosiu/ai-marketing-skills",
+      "ref": "bc84dbc0c3e453fe9b0c1c7a5f95d8da223289c6",
+      "path": "video-caption-generator",
+      "claude_path": "/home/ae/.claude/skills/video-caption-generator",
+      "local_adaptation": "Moved upstream name/description frontmatter ahead of the preamble so Codex and Claude can load it."
+    },
+    {
+      "folder": "seo-ops",
+      "name": "seo-ops",
+      "repo": "ericosiu/ai-marketing-skills",
+      "ref": "bc84dbc0c3e453fe9b0c1c7a5f95d8da223289c6",
+      "path": "seo-ops",
+      "local_adaptation": "Added required Codex name/description frontmatter to upstream Markdown.",
+      "claude_path": "/home/ae/.claude/skills/seo-ops"
+    },
+    {
+      "folder": "content-ops",
+      "name": "expert-panel",
+      "repo": "ericosiu/ai-marketing-skills",
+      "ref": "bc84dbc0c3e453fe9b0c1c7a5f95d8da223289c6",
+      "path": "content-ops",
+      "claude_path": "/home/ae/.claude/skills/content-ops"
+    },
+    {
+      "folder": "growth-signal-charts",
+      "name": "growth-signal-charts",
+      "repo": "ericosiu/ai-marketing-skills",
+      "ref": "bc84dbc0c3e453fe9b0c1c7a5f95d8da223289c6",
+      "path": "growth-signal-charts",
+      "claude_path": "/home/ae/.claude/skills/growth-signal-charts"
+    },
+    {
+      "folder": "app-store-screenshots",
+      "name": "app-store-screenshots",
+      "repo": "ParthJadhav/app-store-screenshots",
+      "ref": "18951ddc4e06c53a3d34207732c16d9568f88d11",
+      "path": "skills/app-store-screenshots",
+      "claude_path": "/home/ae/.claude/skills/app-store-screenshots"
+    },
+    {
+      "folder": "search-console",
+      "name": "search-console",
+      "repo": "nowork-studio/notfair-plugin",
+      "ref": "d551297649be6232090683d0931f771fe1c4d329",
+      "path": "skills/search-console",
+      "claude_path": "/home/ae/.claude/skills/search-console"
+    },
+    {
+      "folder": "google-analytics",
+      "name": "google-analytics",
+      "repo": "nowork-studio/notfair-plugin",
+      "ref": "d551297649be6232090683d0931f771fe1c4d329",
+      "path": "skills/google-analytics",
+      "claude_path": "/home/ae/.claude/skills/google-analytics"
+    },
+    {
+      "folder": "hreflang-international",
+      "name": "hreflang-international",
+      "repo": "nowork-studio/notfair-plugin",
+      "ref": "d551297649be6232090683d0931f771fe1c4d329",
+      "path": "skills/hreflang-international",
+      "claude_path": "/home/ae/.claude/skills/hreflang-international"
+    },
+    {
+      "folder": "meta-ads-creative",
+      "name": "meta-ads-creative",
+      "repo": "nowork-studio/notfair-plugin",
+      "ref": "d551297649be6232090683d0931f771fe1c4d329",
+      "path": "skills/meta-ads-creative",
+      "claude_path": "/home/ae/.claude/skills/meta-ads-creative"
+    }
+  ]
+}

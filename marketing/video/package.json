@@ -1,0 +1,18 @@
+{
+  "name": "qrupgrade-launch-film",
+  "private": true,
+  "scripts": {
+    "studio": "remotion studio src/index.jsx",
+    "landscape": "remotion render src/index.jsx Scan-The-Art-Landscape out/scan-the-art-landscape.mp4 --crf=16",
+    "portrait": "remotion render src/index.jsx Scan-The-Art-Portrait out/scan-the-art-portrait.mp4 --crf=16"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.526",
+    "remotion": "4.0.526",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

@@ -26,3 +26,8 @@ verification.md
 **/*.mobileprovision
 
 .open-next/
+.agents/loops/
+marketing/reports/
+marketing/video/node_modules
+marketing/video/out/
+.seo-god/

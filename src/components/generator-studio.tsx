@@ -43,6 +43,9 @@ import { DestinationIcon } from "./destination-icon";
 import { QrPreviewDialog } from "./qr-preview-dialog";
 import AiArtPanel from "./ai-art-panel";
 import CloudSave from "./cloud-save";
+import { ShowcaseShare } from './showcase-share';
+import { emitGrowthEvent } from '@/lib/showcase-card';
+import type { DesignArtifact } from '@/lib/editor-draft';
 import "../app/composition.css";
 import artProofs from "@/lib/artwork-proofs.json";
 import {
@@ -156,6 +159,7 @@ export default function GeneratorStudio({
   const [showUtm, setShowUtm] = useState(seed?.showUtm ?? false);
   const [utm, setUtm] = useState(seed?.utm || { source: "", medium: "", campaign: "" });
   const [result, setResult] = useState<Rendered | null>(null);
+  const [exported, setExported] = useState<{ key: string; artifact: DesignArtifact } | null>(null);
   const [renderEpoch, setRenderEpoch] = useState(0);
   const [failure, setFailure] = useState<{
     key: string;
@@ -487,11 +491,13 @@ export default function GeneratorStudio({
     );
   }
   async function download() {
-    if (!ready || !current || uploadsBusy || exporting) return;
+    if (!ready || !current || !artifact || uploadsBusy || exporting) return;
     setExporting(true);
     setMessage("");
     try {
       await exportQR(current.svg, format, sizeMm, name, encoded.text);
+      setExported({ key, artifact });
+      emitGrowthEvent('export_requested');
       setMessage(
         "Downloaded. Test your QR on a phone and a physical proof before printing a batch.",
       );
@@ -1189,6 +1195,7 @@ export default function GeneratorStudio({
                     : `${format.toUpperCase()} image · scan-checked after encoding.`}
             </p>
             <div className="workflow-save-panel">
+              {exported?.key === key && ready && !uploadsBusy && <ShowcaseShare key={exported.key} artifact={exported.artifact}/>}
               <button className="workflow-wide" disabled={!ready || uploadsBusy || exporting} onClick={openCampaignKit}>Create campaign kit <ArrowRight size={16}/></button>
               <p className="generator-note">Your artwork as a social post, story and A6 print card. Includes scan checks and a print guide.</p>
               <label className="generator-field"><span>Design name &amp; file name</span><input value={name} maxLength={80} onChange={e=>setName(e.target.value)}/></label>
