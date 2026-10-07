@@ -1,0 +1,10 @@
+{
+  "name": "braces",
+  "version": "3.0.4",
+  "description": "braces 3.0.3 plus a brace-depth limit for GHSA-vfj7-8cjw-p6xm. Remove this override when a published braces release is newer than 3.0.3.",
+  "license": "MIT",
+  "main": "index.js",
+  "engines": {
+    "node": ">=8"
+  }
+}
