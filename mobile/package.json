@@ -7,6 +7,7 @@
     "@expo/vector-icons": "^15.0.2",
     "@react-native-community/slider": "5.2.0",
     "base64-js": "^1.5.1",
+    "braces": "file:../security/overrides/braces",
     "expo": "~57.0.23",
     "expo-asset": "~57.0.3",
     "expo-camera": "~57.0.5",
@@ -22,6 +23,7 @@
     "expo-system-ui": "~57.0.4",
     "fast-png": "^8.0.0",
     "jsqr": "^1.4.0",
+    "node-forge": "file:../security/overrides/node-forge",
     "qrcode": "^1.5.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -49,7 +51,11 @@
   },
   "private": true,
   "overrides": {
+    "braces": "$braces",
     "decode-uri-component": "0.5.0",
+    "node-forge": "$node-forge",
+    "shell-quote": "1.11.0",
+    "source-map-js": "1.2.2",
     "uuid": "11.1.1"
   }
 }
