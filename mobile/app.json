@@ -12,7 +12,8 @@
       "bundleIdentifier": "com.qrupgrade.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "buildNumber": "4"
     },
     "android": {
       "package": "com.qrupgrade.app",
@@ -25,7 +26,7 @@
       "permissions": [
         "android.permission.CAMERA"
       ],
-      "versionCode": 3
+      "versionCode": 4
     },
     "web": {
       "bundler": "metro",
@@ -66,7 +67,8 @@
           "imageWidth": 160,
           "resizeMode": "contain"
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "router": {},
