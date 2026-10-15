@@ -72,7 +72,7 @@ export function Footer() {
         <Link href="/ai">Product facts</Link>
         <Link href="/links">Dynamic links</Link>
         <Link href="/content">Hosted content</Link>
-        <Link href="/billing">Billing</Link>
+        <Link href="/pricing">Pricing</Link>
         <a href="/llms.txt">llms.txt</a>
       </nav>
     </footer>

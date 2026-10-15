@@ -48,6 +48,8 @@ const icons = {
   forms: ClipboardList,
 };
 const glassIcons = new Set<DestinationId>([
+  "website",
+  "spotify",
   "instagram",
   "tiktok",
   "linkedin",

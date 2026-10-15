@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import {readJson} from "@/lib/read-json";
 import { Check, LoaderCircle, Sparkles } from "lucide-react";
 import "../app/ai-art.css";
 import { ART_STYLES, type ArtStyle as Style } from '../../shared/art-styles.mjs';
@@ -39,11 +40,7 @@ export default function AiArtPanel({ onApply }: { onApply: (image: string) => vo
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/art", { signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(await readError(response, "AI artwork is unavailable right now."));
-        return response.json() as Promise<Service>;
-      })
+    readJson<Service>("/api/art",controller.signal)
       .then(setService)
       .catch((reason) => {
         if (reason instanceof DOMException && reason.name === "AbortError") return;
@@ -150,10 +147,10 @@ export default function AiArtPanel({ onApply }: { onApply: (image: string) => vo
     <section className="ai-art-panel" aria-labelledby="ai-art-title">
       <div className="ai-art-heading">
         <div>
-          <span className="section-kicker"><Sparkles size={12} /> Live AI artwork</span>
+          <span className="section-kicker"><Sparkles size={12} /> {service?.enabled ? "Live AI artwork" : "AI artwork"}</span>
           <h3 id="ai-art-title">Give your QR another dimension.</h3>
         </div>
-        <span className="ai-art-limit">3 generations per day</span>
+        {service?.enabled && <span className="ai-art-limit">{service.dailyLimit} generations per day</span>}
       </div>
       {service === null ? (
         <p className="ai-art-status" role="status">Checking generator availability…</p>

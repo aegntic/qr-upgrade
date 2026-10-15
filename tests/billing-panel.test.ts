@@ -49,10 +49,10 @@ test('a newer billing action supersedes the old request and its valid completion
 
 test('billing status ignores account changes during body parsing and accepts a current result',async()=>{
  const staleScope=mounted(),staleOperation=staleScope.operations.begin(staleScope.epochs,'account'),body=deferred<BillingStatus>();
- let parsing=false;const applied:BillingStatus[]=[],errors:string[]=[];
- const request=(async()=>({ok:true,json:()=>{parsing=true;return body.promise;}} as Response)) as typeof fetch;
+ const parsing=deferred<void>();const applied:BillingStatus[]=[],errors:string[]=[];
+ const request=(async()=>({ok:true,json:()=>{parsing.resolve();return body.promise;}} as Response)) as typeof fetch;
  const stale=loadBillingStatus(staleOperation,value=>applied.push(value),message=>errors.push(message),request);
- await Promise.resolve();assert.equal(parsing,true);
+ await parsing.promise;
  staleScope.epochs.reconcile();body.resolve(status);await stale;
  assert.equal(applied.length,0);assert.equal(errors.length,0);
 

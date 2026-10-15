@@ -20,7 +20,7 @@ test('fresh published-link design satisfies the cloud snapshot contract',()=>{
  const draft=newDesign('https://qrupgrade.com/','Release check — editable destination');
  assert.deepEqual(Object.keys(draft.appearance).sort(),['background','foreground','quietZone','style']);
  const saved=validateSnapshot({name:draft.name,draft,artifact:{png}});
- assert.equal(saved.draft.mode,'art');assert.equal(saved.draft.art,'vinyl');assert.equal(saved.draft.content.url,'https://qrupgrade.com/');
+ assert.equal(saved.draft.mode,'custom');assert.equal(saved.draft.appearance.foreground,'#122b36');assert.equal(saved.draft.art,'vinyl');assert.equal(saved.draft.content.url,'https://qrupgrade.com/');
 });
 test('worker rejects absent identity; foreign IDs query with owner and return 404 without R2 access',async()=>{assert.equal((await cloudRequest(new Request('https://service.example/cloud/designs'),{})).status,401);let bound:unknown[]=[];const env={DB:{prepare(sql:string){assert.match(sql,/id=\? AND owner=\?/);return{bind(...v:unknown[]){bound=v;return{first:async()=>null};}};}},ASSETS:{get(){throw new Error('Must not access private object');}}};const r=await cloudRequest(request('GET',undefined,`/${id}`),env);assert.equal(r.status,404);assert.deepEqual(bound,[id,owner]);});
 test('quota atomically reserves including archived designs before touching R2',async()=>{let reserved=false;const env={DB:{prepare(sql:string){assert.match(sql,/INSERT INTO cloud_designs.*SELECT COUNT\(\*\).*owner=\?\) < 50/);assert.doesNotMatch(sql,/archived=/);reserved=true;return{bind(){return{first:async()=>null};}};}},ASSETS:{put(){throw new Error('Quota must run first');}}};assert.equal((await cloudRequest(request('POST',snapshot()),env)).status,409);assert.ok(reserved);});

@@ -43,6 +43,9 @@ import { DestinationIcon } from "./destination-icon";
 import { QrPreviewDialog } from "./qr-preview-dialog";
 import AiArtPanel from "./ai-art-panel";
 import CloudSave from "./cloud-save";
+import { ShowcaseShare } from './showcase-share';
+import { emitGrowthEvent } from '@/lib/showcase-card';
+import type { DesignArtifact } from '@/lib/editor-draft';
 import "../app/composition.css";
 import artProofs from "@/lib/artwork-proofs.json";
 import {
@@ -76,8 +79,8 @@ const modes = [
   {
     id: "custom",
     name: "Custom QR",
-    description: "Your colours. Your style.",
-    image: svgData(qrSvg(demoMatrix, templates[14])),
+    description: "Glass, metal and your colours.",
+    image: svgData(qrSvg(demoMatrix, templates[0])),
   },
   {
     id: "image",
@@ -140,7 +143,7 @@ export default function GeneratorStudio({
     !featuredDestinations.includes(seed?.kind || initialType),
   );
   const [appearance, setAppearance] = useState<Appearance>(seed?.appearance || templates[0]);
-  const [template, setTemplate] = useState(seed?.template || "Essential");
+  const [template, setTemplate] = useState(seed?.template || "Obsidian glass");
   const [art, setArt] = useState(seed?.art || initialArtwork || "dragon");
   const [studyActive, setStudyActive] = useState(seed?.studyActive ?? !!brandStudy);
   const [customImage, setCustomImage] = useState(seed?.customImage || "");
@@ -156,6 +159,7 @@ export default function GeneratorStudio({
   const [showUtm, setShowUtm] = useState(seed?.showUtm ?? false);
   const [utm, setUtm] = useState(seed?.utm || { source: "", medium: "", campaign: "" });
   const [result, setResult] = useState<Rendered | null>(null);
+  const [exported, setExported] = useState<{ key: string; artifact: DesignArtifact } | null>(null);
   const [renderEpoch, setRenderEpoch] = useState(0);
   const [failure, setFailure] = useState<{
     key: string;
@@ -453,7 +457,7 @@ export default function GeneratorStudio({
     setMode("custom");
     setTab("Designs");
     setAppearance(templates[0]);
-    setTemplate("Essential");
+    setTemplate("Obsidian glass");
     setArt("dragon");
     setStudyActive(false);
     setCustomImage("");
@@ -487,11 +491,13 @@ export default function GeneratorStudio({
     );
   }
   async function download() {
-    if (!ready || !current || uploadsBusy || exporting) return;
+    if (!ready || !current || !artifact || uploadsBusy || exporting) return;
     setExporting(true);
     setMessage("");
     try {
       await exportQR(current.svg, format, sizeMm, name, encoded.text);
+      setExported({ key, artifact });
+      emitGrowthEvent('export_requested');
       setMessage(
         "Downloaded. Test your QR on a phone and a physical proof before printing a batch.",
       );
@@ -522,7 +528,7 @@ export default function GeneratorStudio({
             <Step number="1" title="Your destination" />
             {resumeRequested && !seed && <p className="workflow-notice">That unsaved session has ended. <Link href="/designs">Open a saved design</Link>, or create a new one below.</p>}
             <label className="workflow-search destination-search"><input aria-label="Search destinations" placeholder="Search destinations — Wi-Fi, contact, event…" value={destinationQuery} onChange={e=>{setDestinationQuery(e.target.value);if(e.target.value)setMoreTypes(true);}}/></label>
-            <p className="destination-intro">What would you like to share?</p>
+            
             <div
               className="destination-options"
               role="group"
@@ -938,7 +944,7 @@ export default function GeneratorStudio({
                               onChange={(e) => {
                                 setAppearance((a) => ({
                                   ...a,
-                                  [field]: e.target.value,
+                                                            [field]: e.target.value,
                                 }));
                                 setTemplate("");
                               }}
@@ -1059,8 +1065,8 @@ export default function GeneratorStudio({
         >
           <div className="preview-sticky">
             <Step
-              number="4"
-              title="Your QR image"
+              number=""
+              title="Your QR preview"
               headingRef={previewHeading}
             />
             <p className="preview-subtitle">
@@ -1189,6 +1195,7 @@ export default function GeneratorStudio({
                     : `${format.toUpperCase()} image · scan-checked after encoding.`}
             </p>
             <div className="workflow-save-panel">
+              {exported?.key === key && ready && !uploadsBusy && <ShowcaseShare key={exported.key} artifact={exported.artifact}/>}
               <button className="workflow-wide" disabled={!ready || uploadsBusy || exporting} onClick={openCampaignKit}>Create campaign kit <ArrowRight size={16}/></button>
               <p className="generator-note">Your artwork as a social post, story and A6 print card. Includes scan checks and a print guide.</p>
               <label className="generator-field"><span>Design name &amp; file name</span><input value={name} maxLength={80} onChange={e=>setName(e.target.value)}/></label>
@@ -1236,7 +1243,7 @@ function Step({
 }) {
   return (
     <div className="generator-step-title">
-      <span>{number}</span>
+      {number && <span>{number}</span>}
       <h2 ref={headingRef} tabIndex={headingRef ? -1 : undefined}>
         {title}
       </h2>

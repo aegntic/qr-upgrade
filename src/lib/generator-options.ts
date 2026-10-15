@@ -236,6 +236,9 @@ export const featuredDestinations: DestinationId[] = [
 ];
 export type GeneratorMode = "custom" | "image" | "art";
 export const templates: (Appearance & { name: string })[] = [
+  { name: "Obsidian glass", foreground: "#122b36", background: "#fafbfc", style: "soft", quietZone: 4 },
+  { name: "Brushed titanium", foreground: "#303741", background: "#fafbfc", style: "square", quietZone: 4 },
+  { name: "Ruby crystal", foreground: "#481326", background: "#fffafb", style: "soft", quietZone: 4 },
   {
     name: "Essential",
     foreground: "#202025",

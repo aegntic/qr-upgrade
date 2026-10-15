@@ -1504,3 +1504,17 @@ body a.foundation-cta {
     grid-template-columns: 1fr;
   }
 }
+
+/* Aesthetics pass: UI selection is app-red, independent of destination brand colour. */
+body .destination-option[aria-pressed="true"] {
+  background: rgba(226,63,69,.055);
+  border-color: rgba(226,63,69,.52);
+  box-shadow: inset 0 -2px 0 #e23f45;
+}
+body .destination-option:hover { background: rgba(255,255,255,.035); }
+body .destination-option:hover .destination-symbol { transform: translateY(-2px); filter: none; }
+body .destination-selected { color: #e23f45; }
+body .destination-search { min-width: 0; margin: 18px 0 18px; padding: 0 14px; }
+body .destination-search input { border: 0; border-radius: 0; background: transparent; box-shadow: none; padding: 14px 0; min-height: 48px; }
+body .destination-search:focus-within { border-color: #e23f45; }
+body label.destination-search input:not([type="range"]):not([type="color"]) { border: 0; background: transparent; border-radius: 0; box-shadow: none; padding: 14px 0; }

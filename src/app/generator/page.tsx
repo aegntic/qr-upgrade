@@ -29,8 +29,7 @@ export default async function Generator({
   const brandStudy =
     study && proof ? { ...study, strength: proof.strength } : undefined;
   const initialArtwork =
-    artworkDesigns.find((d) => d.id === art)?.id ||
-    (!brandStudy && !mode ? "vinyl" : undefined);
+    artworkDesigns.find((d) => d.id === art)?.id;
   return (
     <main id="main" className="foundation-page generator-page">
       <div className="generator-hero">

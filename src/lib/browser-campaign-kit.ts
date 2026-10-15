@@ -3,7 +3,7 @@ import { svgData } from './qr';
 import { campaignLayouts, campaignSvg, campaignProofSvg, campaignGuide, type CampaignCopy } from './campaign-kit';
 import type { DesignArtifact } from './editor-draft';
 
-async function canvasFromImage(source: string, width: number, height: number) {
+export async function canvasFromImage(source: string, width: number, height: number) {
   const image = new Image();
   image.src = source;
   await image.decode();
@@ -17,7 +17,7 @@ async function canvasFromImage(source: string, width: number, height: number) {
   ctx.drawImage(image, 0, 0, width, height);
   return canvas;
 }
-const pngBlob = (canvas: HTMLCanvasElement) => new Promise<Blob>((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Could not prepare a PNG. Please try again.')), 'image/png'));
+export const pngBlob = (canvas: HTMLCanvasElement) => new Promise<Blob>((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Could not prepare a PNG. Please try again.')), 'image/png'));
 const sha256 = async (bytes: Uint8Array<ArrayBuffer>) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), byte => byte.toString(16).padStart(2, '0')).join('');
 
 export async function buildCampaignKit(artifact: DesignArtifact, copy: CampaignCopy, signal: AbortSignal, progress: (label: string) => void) {

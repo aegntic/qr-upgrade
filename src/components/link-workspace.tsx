@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import {readJson} from '@/lib/read-json';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowUpRight, Copy, Link2, Plus, QrCode, Radio, Pause, Archive, BarChart3, ExternalLink } from 'lucide-react';
@@ -18,7 +19,7 @@ export default function LinkWorkspace(){
  const setTarget=(target:string)=>workflow.setLinkEditor(previous=>({...previous,target}));
  const [account,setAccount]=useState<AccountStatus|null>(null),[links,setLinks]=useState<DynamicLink[]>([]),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[archived,setArchived]=useState(false);
  const current=links.find(link=>link.id===selected);const isDirty=linkDirty(workflow.linkEditor);
- useEffect(()=>{const operation=loadOperations.begin(workflow.epochs,'account'),confirmAccount=workflow.beginAccountCheck();(async()=>{try{const r=await fetch('/api/account',{cache:'no-store',signal:operation.signal});if(!r.ok)throw new Error('Your account could not be loaded.');const status=await r.json();if(!operation.current()||!confirmAccount(status.signedIn?status.user.email:null))return;setAccount(status);operation.recapture();if(status.signedIn){const response=await fetch('/api/links',{cache:'no-store',signal:operation.signal});const data=await response.json();if(!operation.current())return;if(!response.ok)throw new Error(data.error);if(operation.current())setLinks(data.links);}}catch(e){if(operation.current())setError(e instanceof Error?e.message:'Please refresh to try again.');}finally{if(operation.alive())setLoading(false);}})();},[]);
+ useEffect(()=>{const operation=loadOperations.begin(workflow.epochs,'account'),confirmAccount=workflow.beginAccountCheck();(async()=>{try{const status=await readJson<AccountStatus&{user:{email:string}}>('/api/account',operation.signal);if(!operation.current()||!confirmAccount(status.signedIn?status.user.email:null))return;setAccount(status);operation.recapture();if(status.signedIn){const data=await readJson<{links:DynamicLink[]}>('/api/links',operation.signal);if(!operation.current())return;if(operation.current())setLinks(data.links);}}catch(e){if(operation.current())setError(e instanceof Error?e.message:'Please refresh to try again.');}finally{if(operation.alive())setLoading(false);}})();},[]);
  function replace(link?:DynamicLink){workflow.setLinkEditor({selected:link?.id??null,name:link?.name??'',target:link?.target??'',baseline:{name:link?.name??'',target:link?.target??''}});setError('');setNotice('');}
  function choose(link?:DynamicLink){discard.request(isDirty,()=>replace(link));}
  async function update(change?:{status?:DynamicLink['status'];archived?:boolean}){

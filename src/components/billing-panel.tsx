@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import {readJson} from '@/lib/read-json';
 import {useEffect,useState} from 'react';
 import {ArrowUpRight,CreditCard,ShieldCheck} from 'lucide-react';
 import type {BillingStatus} from '@/lib/billing-types';
@@ -12,11 +13,8 @@ type BillingFetch=typeof fetch;
 
 export async function loadBillingStatus(operation:BillingOperation,setStatus:(status:BillingStatus)=>void,setError:(message:string)=>void,request:BillingFetch=fetch){
  try{
-  const response=await request('/api/billing',{cache:'no-store',signal:operation.signal});
+  const data=await readJson<BillingStatus>('/api/billing',operation.signal,request);
   if(!operation.current())return;
-  const data=await response.json();
-  if(!operation.current())return;
-  if(!response.ok)throw new Error(data.error||'Billing could not be loaded.');
   setStatus(data);
  }catch(e){if(operation.current())setError(e instanceof Error?e.message:'Please refresh to try again.');}
 }

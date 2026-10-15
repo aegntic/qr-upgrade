@@ -457,8 +457,8 @@ export default function ArtStudio({
             }}
           />
           <p className="microcopy">
-            AI-created examples, or your own image. Live text-to-image
-            generation is not connected yet.
+            AI-created examples, or your own image. For prompt-based artwork,
+            open QR Art in the studio and check generator availability.
           </p>
           <div className="art-input-divider" />
           <div className="section-label">YOUR PROFILE, AT THE CENTRE</div>
