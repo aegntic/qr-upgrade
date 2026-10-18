@@ -28,13 +28,15 @@ const forge = require("../security/overrides/node-forge") as {
 
 test("dependency overrides pin the patched advisory versions", () => {
   const root = JSON.parse(readFileSync("package.json", "utf8")) as {
+    dependencies: Record<string, string>;
     overrides: Record<string, string>;
   };
   const mobile = JSON.parse(readFileSync("mobile/package.json", "utf8")) as {
     dependencies: Record<string, string>;
     overrides: Record<string, string>;
   };
-  assert.equal(root.overrides.dompurify, "3.4.16");
+  assert.equal(root.dependencies.next, "15.5.28");
+  assert.equal(root.overrides.dompurify, "3.4.17");
   assert.equal(root.overrides.sharp, "0.35.5");
   assert.equal(root.overrides["source-map-js"], "1.2.2");
   assert.equal(root.overrides.postcss, "8.5.28");
