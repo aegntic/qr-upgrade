@@ -108,7 +108,7 @@ It returns the checklist and `decoderTested: false`. It accepts no image and is 
 
 ## Verification
 
-See [verification.md](verification.md) for results and remaining native release checks. Both dependency trees reported zero known vulnerabilities in `npm audit` on 18 September 2026. Mobile overrides pin patched `decode-uri-component` and `uuid`; review these when upgrading Expo.
+See [verification.md](verification.md) for results and remaining native release checks. Overrides pin patched transitive packages while the direct dependency is unchanged: the web app pins `dompurify`, `postcss`, `sharp`, and `source-map-js`; mobile pins `decode-uri-component`, `uuid`, `shell-quote`, `source-map-js`, and local patches of `braces` and `node-forge` in `security/overrides/`. Review those pins when upgrading Next or Expo.
 
 ## References
 
