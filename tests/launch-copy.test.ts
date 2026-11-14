@@ -20,5 +20,10 @@ test('AI panel claims live generation and quota only after the capability check'
 });
 test('pricing is discoverable and remains connected to real billing',()=>{
  assert.ok(readFileSync('src/components/brand.tsx','utf8').includes('<Link href="/pricing">Pricing</Link>'));
- assert.ok(readFileSync('src/app/pricing/page.tsx','utf8').includes("redirect('/billing')"));
+ const pricing=readFileSync('src/app/pricing/page.tsx','utf8');
+ assert.ok(pricing.includes('<BillingPanel/>'));
+ assert.ok(pricing.includes("canonical:'/pricing'"));
+ assert.ok(pricing.includes('Try the free studio'));
+ assert.ok(!pricing.includes('noindex'));
+ assert.ok(readFileSync('src/components/brand.tsx','utf8').includes('https://aegntic.ai'));
 });
