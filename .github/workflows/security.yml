@@ -45,6 +45,8 @@ jobs:
           python -m pip install -r scripts/security/requirements.txt
           python scripts/security/install-tools.py "$RUNNER_TEMP/qr-upgrade-tools"
           echo "$RUNNER_TEMP/qr-upgrade-tools" >> "$GITHUB_PATH"
+      - name: Verify secret-scan exception boundaries
+        run: node scripts/security/check-gitleaks-allowlist.mjs
       - name: Scan commit history for secrets
         run: gitleaks git --redact=100 --no-banner --config .gitleaks.toml .
       - name: Collect and enforce technical evidence
