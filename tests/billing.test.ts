@@ -5,7 +5,7 @@ import Stripe from 'stripe';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import {billingRequest} from '../workers/qr-service/billing.mjs';
-import {billingAction,billingStatus,billingWebhook,billingReady,readBillingBody,resolveEntitlement,type BillingConfig} from '../src/lib/server/billing';
+import {billingAction,billingStatus,publicBillingStatus,billingWebhook,billingReady,readBillingBody,resolveEntitlement,type BillingConfig} from '../src/lib/server/billing';
 import {PLAN_LIMITS} from '../shared/plan-limits.mjs';
 import {signAccountToken} from '../src/lib/server/account';
 const owner='a'.repeat(64),other='b'.repeat(64);
@@ -252,4 +252,15 @@ test('definitive customer metadata rejection releases its exact reservation; old
  assert.equal((await billingAction(await browser(),'checkout',c,known.deps)).status,503);assert.equal(known.env.sqlite.prepare('SELECT count(*) n FROM billing_customer_creations').get()!.n,0);known.env.sqlite.close();
  const stale=fixture();stale.env.sqlite.prepare('INSERT INTO billing_customer_creations VALUES(?,?,?,?)').run(owner,'test','d'.repeat(32),Math.floor(Date.now()/1000)-24*3600);stale.s.customers.create=async()=>{assert.fail('Old ambiguous customer creation must not be retried');};
  assert.equal((await billingAction(await browser(),'checkout',c,stale.deps)).status,503);assert.equal(stale.env.sqlite.prepare('SELECT count(*) n FROM billing_customer_creations').get()!.n,1);stale.env.sqlite.close();
+});
+
+test('public pricing snapshot reads validated prices without customer access',async()=>{
+ const f=fixture();
+ const privateResponse=await billingStatus(await browser(),c,f.deps);
+ assert.equal((await privateResponse.json()).signedIn,true,'Fixture must establish authenticated private billing first');
+ const status=await publicBillingStatus(c,{stripe:f.s as unknown as Stripe,fetch:async()=>{throw new Error('Public pricing must not read account records');}});
+ assert.equal(status?.configured,true);assert.equal(status?.signedIn,false);assert.equal(status?.subscription,null);assert.equal(status?.canManage,false);
+ assert.equal(status?.plans.length,2);assert.equal(status?.plans[0].amount,1200);
+ f.s.prices.retrieve=async()=>{throw new Error('Unavailable');};
+ assert.equal(await publicBillingStatus(c,f.deps),null,'Unavailable prices must not be invented');
 });
