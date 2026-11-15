@@ -115,7 +115,11 @@ try {
     if (route === "/pricing") {
       assert.match(page.headers.get("cache-control") || "", /no-store/, "Public pricing must not cache private refresh state");
       const visible = content.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '').replace(new RegExp('<!--.*?-->', 'gs'), '');
-      assert.match(visible, /Start free/);
+      assert.match(visible, /<h1>QR Upgrade pricing<\/h1>/);
+      assert.match(visible, /<h2 class="billing-label">Free<\/h2>/);
+      assert.match(visible, /<title>QR Upgrade pricing<\/title>/);
+      assert.match(visible, /property="og:url" content="https:\/\/qrupgrade.com\/pricing"/);
+      assert.match(visible, /name="twitter:title" content="QR Upgrade pricing"/);
       assert.match(visible, /Try the free studio/);
       assert.match(visible, /aria-label="Free plan"/);
       assert.match(visible, /50 cloud designs/);
