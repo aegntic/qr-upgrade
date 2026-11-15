@@ -114,7 +114,7 @@ try {
     const content = page.body;
     if (route === "/pricing") {
       assert.match(page.headers.get("cache-control") || "", /no-store/, "Public pricing must not cache private refresh state");
-      const visible = content.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '').replace(/<!--[\s\S]*?-->/g, '');
+      const visible = content.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '').replace(new RegExp('<!--.*?-->', 'gs'), '');
       assert.match(visible, /Start free/);
       assert.match(visible, /Try the free studio/);
       assert.match(visible, /aria-label="Free plan"/);
