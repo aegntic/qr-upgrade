@@ -1,10 +1,24 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { guardRequest } from '../cloudflare/guard';
+import { guardRequest, httpsCanonicalRedirect } from '../cloudflare/guard';
 import { runtimeVariable, trustedRequestIp, validProviderIp, withWebEntry } from '../cloudflare/runtime';
 import { serviceAvailable, serviceFetch } from '../cloudflare/service';
 import { sameOrigin } from '../src/lib/server/art-service';
 const request = (path = '/api/unknown', method = 'GET', headers: Record<string,string> = {}) => new Request(`https://qrupgrade.com${path}`, { method, headers: { 'cf-connecting-ip': '192.0.2.1', ...headers } });
+test('plain HTTP on the public hosts redirects to the https apex and keeps path and query', async () => {
+ const cases = [
+  ['http://qrupgrade.com/', 'https://qrupgrade.com/'],
+  ['http://qrupgrade.com/pricing?plan=pro', 'https://qrupgrade.com/pricing?plan=pro'],
+  ['http://www.qrupgrade.com/pricing?plan=brand', 'https://qrupgrade.com/pricing?plan=brand'],
+ ];
+ for (const [from, to] of cases) {
+  const response = httpsCanonicalRedirect(new Request(from));
+  assert.equal(response?.status, 301, from);
+  assert.equal(response?.headers.get('location'), to);
+  assert.equal((await guardRequest(new Request(from), {}, async () => assert.fail('HTTP must not reach the app'))).status, 301);
+ }
+ for (const url of ['https://qrupgrade.com/pricing?plan=pro', 'https://www.qrupgrade.com/', 'http://127.0.0.1:3040/pricing', 'http://localhost/pricing?x=1']) assert.equal(httpsCanonicalRedirect(new Request(url)), null);
+});
 test('API guard permits 120, blocks 121; hashes identity and fails closed', async () => {
  let calls = 0;
  const env = { API_RATE_LIMITER: { async limit({key}: {key:string}) { assert.match(key,/^[a-f0-9]{64}$/); return {success: ++calls <= 120}; } } };
