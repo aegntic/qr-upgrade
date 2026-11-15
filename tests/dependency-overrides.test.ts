@@ -44,7 +44,7 @@ test("dependency overrides pin the patched advisory versions", () => {
   assert.equal(mobile.overrides["source-map-js"], "1.2.2");
   assert.equal(mobile.overrides.braces, "$braces");
   assert.equal(mobile.dependencies.braces, "file:../security/overrides/braces");
-  assert.equal(mobile.dependencies["node-forge"], "1.4.2");
+  assert.equal(mobile.dependencies["node-forge"], "1.4.3");
   assert.equal("node-forge" in mobile.overrides, false);
   assert.equal(mobile.overrides["decode-uri-component"], "0.5.1");
   assert.equal(mobile.overrides.uuid, "11.1.1");
@@ -61,11 +61,11 @@ test("patched braces still compiles ordinary patterns and rejects deep nesting",
   );
 });
 
-test("node-forge 1.4.2 rejects nested DigestAlgorithm garbage and still verifies a real signature", () => {
+test("node-forge 1.4.3 rejects nested DigestAlgorithm garbage and still verifies a real signature", () => {
   const installed = JSON.parse(
     readFileSync("mobile/node_modules/node-forge/package.json", "utf8"),
   ) as { version: string };
-  assert.equal(installed.version, "1.4.2");
+  assert.equal(installed.version, "1.4.3");
   const n = new forge.jsbn.BigInteger(
     "E932AC92252F585B3A80A4DD76A897C8B7652952FE788F6EC8DD640587A1EE56" +
       "47670A8AD4C2BE0F9FA6E49C605ADF77B5174230AF7BD50E5D6D6D6D28CCF0A8" +
