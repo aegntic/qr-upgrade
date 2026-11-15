@@ -134,6 +134,28 @@ export default function Docs() {
           <p>{f.a}</p>
         </section>
       ))}
+      <h2>Guides</h2>
+      <p>
+        Short guides use these checks and the current plan limits. Prices for
+        Pro and Brand stay on the pricing page.
+      </p>
+      <ul>
+        <li>
+          <Link href="/guides/free-studio-versus-pro-and-brand">
+            Free studio versus Pro and Brand: what you actually pay for
+          </Link>
+        </li>
+        <li>
+          <Link href="/guides/when-a-dynamic-qr-is-worth-a-paid-plan">
+            When a dynamic QR is worth a paid plan
+          </Link>
+        </li>
+        <li>
+          <Link href="/guides/check-the-qr-before-you-print">
+            Check the QR before you print
+          </Link>
+        </li>
+      </ul>
       <h2>Sources and discovery files</h2>
       <ul>
         {sources.map((s) => (
