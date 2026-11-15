@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {summary,faqs} from '../src/lib/facts';
 
 test('public facts defer paid availability to the configured billing page',()=>{
- assert.ok(summary.includes('Billing for current paid-plan availability'));
+ assert.ok(summary.includes('Paid plans are on Billing'));
  assert.ok(!summary.includes('not a launched subscription service'));
  assert.ok(faqs.find(f=>f.q==='Can I create a unique image from a prompt?')?.a.startsWith('When live generation is available'));
 });

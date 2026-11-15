@@ -102,7 +102,7 @@ export default function Docs() {
         material with several phones.
       </p>
       <h2>Keeping your work</h2>
-      <p>Save design stores the current destination, images and any credentials in this browser, with up to five prior versions. My designs supports search, rename, duplicate, archive and restore. Clearing site data removes these local copies. Cloud saving is a separate, explicit action and requires Google sign-in; it stays unavailable until the account connection is configured.</p>
+      <p>Save design stores the current destination, images and any credentials in this browser, with up to five prior versions. My designs supports search, rename, duplicate, archive and restore. Clearing site data removes these local copies. Cloud saving is a separate, explicit action. It works once you are signed in with Google.</p>
       <p>Generated images can be retrieved for one hour and are removed from the generation service within two hours. Applying or saving an image keeps a browser copy. Generation metadata without the prompt is retained for three days to enforce usage limits.</p>
       <h2>Parameter-check API</h2>
       <p>
