@@ -25,9 +25,9 @@ export function Header() {
       <nav aria-label="Main navigation">
         <Link href="/generator">QR Generator</Link>
         <Link href="/scan-lab">Scan Lab</Link>
-        <Link href="/designs">My designs</Link>
+        <Link href="/pricing">Pricing</Link>
         <Link href="/#examples">Examples</Link>
-        <Link href="/#qr-types">QR types</Link>
+        <Link href="/designs">My designs</Link>
       </nav>
       <div className="header-actions">
         <MotionToggle />
@@ -45,7 +45,7 @@ export function Footer() {
       <div>
         <Brand />
         <p>A little square. A better connection.</p>
-        <span>© {new Date().getFullYear()} QR Upgrade</span>
+        <span>© {new Date().getFullYear()} QR Upgrade · Part of <a href="https://aegntic.ai">AEGNTIC</a></span>
       </div>
       <nav aria-label="Create">
         <strong>Create</strong>

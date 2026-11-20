@@ -23,7 +23,7 @@ export default function Press() {
     <p><a href="/opengraph-image.jpg" download>Download the product banner · JPG</a></p>
     <p>Use these assets to identify QR Upgrade in product coverage. Keep the name and mark legible. Brand-study examples are unofficial explorations and should not be described as customer endorsements.</p>
     <h2>Accurate product references</h2>
-    <ul><li><Link href="/ai">Current capabilities and limitations</Link></li><li><Link href="/templates">Artwork examples</Link></li><li><Link href="/docs">Scan checks and print methodology</Link></li><li><Link href="/billing">Current paid-plan availability</Link></li></ul>
+    <ul><li><Link href="/ai">Current capabilities and limitations</Link></li><li><Link href="/templates">Artwork examples</Link></li><li><Link href="/docs">Scan checks and print methodology</Link></li><li><Link href="/billing">Paid plans</Link></li></ul>
     <p>This guide covers the web studio. It does not announce availability in a native app store or an editorial award.</p>
   </main>;
 }

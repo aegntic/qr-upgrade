@@ -283,7 +283,7 @@ function materialSvg(matrix: Matrix, a: Appearance, material: "obsidian" | "tita
     const i=y*matrix.size+x;
     if(!matrix.data[i]||finder(x,y)) continue;
     const px=x+q,py=y+q,reserved=matrix.reservedBit[i]===1;
-    const r=reserved?0:a.style==="square"?.06:a.style==="dot"?.36:.22;
+    const r = reserved ? 0 : a.style === "square" ? 0.06 : a.style === "dot" ? 0.36 : 0.22;
     marks+=`<rect x="${px}" y="${py}" width="1" height="1" rx="${r}" fill="url(#face)"/>`;
     if(!reserved) marks+=`<path d="M${px+.18} ${py+.12}h.6" stroke="${light}" stroke-opacity=".42" stroke-width=".07" stroke-linecap="round"/>`;
   }

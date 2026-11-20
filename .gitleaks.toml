@@ -8,3 +8,11 @@ paths = ['''(^|/)(node_modules|\.next|\.expo|dist|build|Pods|\.git)/''', '''^com
 [[allowlists]]
 description = "Git-ignored local runtime secret store; never a deployment source"
 paths = ['''^\.env\.local$''', '''^\.dev\.vars(?:\..*)?$''']
+
+[[allowlists]]
+description = "Exact historical node-forge function alias, not credential material"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^security/overrides/node-forge/lib/pkcs12\.js$''']
+regexTarget = "match"
+regexes = ['''^p12\.generateKey = forge\.pbe\.generatePkcs12Key;$''']

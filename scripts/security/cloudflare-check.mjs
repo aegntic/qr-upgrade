@@ -57,6 +57,10 @@ async function scanArtifacts() {
  for(const file of assets) {const data=await readFile(file);for(const value of generated) assert.equal(data.includes(Buffer.from(value)),false,'Server build key exposed in public assets');}
  const escape=value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
  const patterns=generated.map(value=>'(?:encryptionKey|NEXT_SERVER_ACTIONS_ENCRYPTION_KEY|__NEXT_PREVIEW_MODE_SIGNING_KEY|__NEXT_PREVIEW_MODE_ENCRYPTION_KEY|previewModeSigningKey|previewModeEncryptionKey)["\\s]*:["\\s]*'+escape(value)+'"');
+ // Next 16's bundled regex tokenizer initializes two exports to undefined; this is code, not a token.
+ patterns.push('t2\\.tokenizeClass=t2\\.strToChars=void ');
+ // The HTTP parser aliases exported character tables; it contains no credential value.
+ patterns.push('e3\\.CONNECTION_TOKEN_CHARS = e3\\.RELAXED_HEADER_CHARS');
  // React's key-path/implicit-slot variable assignment is code, not a credential.
  patterns.push('\\b[A-Za-z_$][A-Za-z0-9_$]*\\.keyPath,[A-Za-z_$][A-Za-z0-9_$]*=[A-Za-z_$][A-Za-z0-9_$]*\\.implicitSlot;');
  patterns.push('(?:[A-Za-z_$][A-Za-z0-9_$]*\\.)?idempotencyKey\\s*=\\s*[A-Za-z_$][A-Za-z0-9_$]*\\.idempotencyKey\\s');

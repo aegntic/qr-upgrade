@@ -84,6 +84,11 @@ export async function billingStatus(r:Request,c=billingConfig(),d:BillingDeps={}
  return accountReply({configured:true,signedIn:!!user,plans:offers,subscription:current?.subscription||null,canManage:!!b,entitlement:entitlement(current?.subscription||null)} satisfies BillingStatus);
  }catch{return unavailable();}
 }
+/** Public SSR snapshot uses no cookies and never loads a customer's billing record. */
+export async function publicBillingStatus(c=billingConfig(),d:BillingDeps={}):Promise<BillingStatus|null>{
+ const response=await billingStatus(new Request('https://qrupgrade.com/api/billing'),c,d);
+ return response.ok?await response.json() as BillingStatus:null;
+}
 export async function billingAction(r:Request,action:'checkout'|'portal',c=billingConfig(),d:BillingDeps={}){
  const user=await checkedAccount(r,c.account,d);if(user instanceof Response)return user;if(!user)return accountReply({error:'Sign in to manage billing.'},401);
  if(!accountSameOrigin(r,c.account))return accountReply({error:'Open billing to continue.'},403);

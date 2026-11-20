@@ -1,7 +1,22 @@
 import { createHash } from 'node:crypto';
 import { securityHeaders } from '../src/lib/security/headers';
 import { validProviderIp, withWebEntry, type WebEnvironment } from './runtime';
+const CANONICAL_ORIGIN = 'https://qrupgrade.com';
+const HTTP_HOSTS = new Set(['qrupgrade.com', 'www.qrupgrade.com']);
+export function httpsCanonicalRedirect(request: Request): Response | null {
+  const url = new URL(request.url);
+  if (url.protocol !== 'http:' || !HTTP_HOSTS.has(url.hostname)) return null;
+  return new Response(null, {
+    status: 301,
+    headers: {
+      Location: new URL(`${url.pathname}${url.search}`, CANONICAL_ORIGIN).href,
+      'Cache-Control': 'public, max-age=3600',
+    },
+  });
+}
 export async function guardRequest(request: Request, env: WebEnvironment, next: (request: Request) => Promise<Response>): Promise<Response> {
+  const redirected = httpsCanonicalRedirect(request);
+  if (redirected) return redirected;
   const url = new URL(request.url);
   const local = env.LOCAL_TEST_IDENTITY === 'local-development' && ['localhost', '127.0.0.1'].includes(url.hostname);
   const ip = local ? 'local-development' : validProviderIp(request.headers.get('cf-connecting-ip'));
