@@ -8,7 +8,6 @@ on:
     - cron: '17 3 * * *'
 permissions:
   contents: read
-  actions: read
 concurrency:
   group: security-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -46,19 +45,26 @@ jobs:
           python scripts/security/install-tools.py "$RUNNER_TEMP/qr-upgrade-tools"
           echo "$RUNNER_TEMP/qr-upgrade-tools" >> "$GITHUB_PATH"
       - name: Verify secret-scan exception boundaries
-        run: node scripts/security/check-gitleaks-allowlist.mjs
+        run: |
+          if ! node scripts/security/check-gitleaks-allowlist.mjs >/dev/null 2>&1; then
+            echo 'Secret-scan exception check failed.'
+            exit 1
+          fi
       - name: Scan commit history for secrets
-        run: gitleaks git --redact=100 --no-banner --config .gitleaks.toml .
+        run: |
+          if ! gitleaks git --redact=100 --no-banner --config .gitleaks.toml . >/dev/null 2>&1; then
+            echo 'Commit-history secret scan failed. Investigate in an authorized private checkout.'
+            exit 1
+          fi
       - name: Collect and enforce technical evidence
-        run: npm run security:evidence
-      - name: Retain private evidence
-        if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: security-evidence-${{ github.sha }}
-          path: compliance/evidence/
-          retention-days: 30
-          if-no-files-found: error
+        # Detailed reports stay on this ephemeral runner. Never upload them from this public workflow.
+        run: |
+          umask 077
+          if ! npm run security:evidence >/dev/null 2>&1; then
+            echo 'Technical checks failed. Collect diagnostic evidence in an authorized private checkout.'
+            exit 1
+          fi
+          echo 'Technical checks passed. Detailed evidence was not published.'
   production-readiness:
     name: production-readiness
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
@@ -67,28 +73,9 @@ jobs:
     timeout-minutes: 5
     environment: production-security-review
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version-file: .nvmrc
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
-        with:
-          name: security-evidence-${{ github.sha }}
-          path: compliance/evidence/
-      # Add reviewed retrieval from the organization's protected evidence store here.
-      # It must verify provenance before writing manual.json and referenced artifacts.
-      # Without those approvals the real gate below fails closed.
-      - name: Enforce release evidence
-        run: npm run compliance:release
-      - name: Retain readiness decision
-        if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: release-readiness-${{ github.sha }}
-          path: |
-            compliance/evidence/release-readiness.json
-            compliance/evidence/readiness.html
-          retention-days: 30
-          if-no-files-found: error
+      # Keep the required readiness check fail-closed until approved restricted
+      # storage can supply the technical and manual evidence with verified provenance.
+      - name: Block release readiness without restricted evidence retrieval
+        run: |
+          echo 'Release readiness is blocked: restricted evidence retrieval is not configured.'
+          exit 1
