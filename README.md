@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/cover-16x9.jpg" alt="qr-upgrade — QR Upgrade web and native application" width="100%" />
+</p>
+
 # QR Upgrade
 
 A working product prototype for **qrupgrade.com**, with a Next.js website and an Expo app targeting Android and iOS. Create an artistic QR image where the artwork itself carries a destination, validate it, and export the image without an account.
